@@ -44,13 +44,13 @@ tasks (5–7) until the MVP works and is pushed to GitHub.
     top wasters have dollars and CO2 with units.
   - _Requirements: 3_
 
-- [ ] 4. Static HTML report (`src/report.py`)
-  - [ ] 4.1 Write `src/report.py` to build one self-contained `outputs/report.html`
+- [x] 4. Static HTML report (`src/report.py`)
+  - [x] 4.1 Write `src/report.py` to build one self-contained `outputs/report.html`
     (Plotly embedded inline). Include headline numbers (total excess kWh, $, CO2),
     each with units, read from the computed files.
-  - [ ] 4.2 Add the ranked table with a verdict per building ("Wasting heat" /
+  - [x] 4.2 Add the ranked table with a verdict per building ("Wasting heat" /
     "Within expected range" / "Can't judge").
-  - [ ] 4.3 Add actual-vs-expected charts with the 90% band and highlighted waste
+  - [x] 4.3 Add actual-vs-expected charts with the 90% band and highlighted waste
     hours for the top 5 buildings, plus a "What we can't see" section.
   - _How to run:_ `python src/report.py` — open `outputs/report.html` in a browser;
     verify headline numbers, table verdicts, top-5 bands, and the limitations

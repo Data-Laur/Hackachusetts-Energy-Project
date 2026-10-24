@@ -153,3 +153,38 @@ rule (8+ months) can miss changes that started partway through 2017.
   and tracked in HEAD (specs + steering), already pushed.
 - Repo is **public**: https://github.com/Data-Laur/Hackachusetts-Energy-Project
   (HTTP 200 unauthenticated).
+
+## Entry — Task 4: interactive single-file HTML report
+
+### What was built (`src/report.py` -> `docs/index.html`)
+One self-contained page (no server, no Streamlit), Plotly via CDN. One command
+regenerates it: `python src/report.py` from the repo root.
+
+- **View 1 Triage:** headline cards (Confirmed waste count; $/yr and kWh/yr from
+  Confirmed waste only, labeled "conservative: energy above the 90% upper bound";
+  Worth a look; Can't judge). Ranked table (Confirmed waste then Worth a look,
+  each by excess) with building, type, verdict, flagged by, pattern, likely fix,
+  excess kWh/$/kg CO2. Filters by type and verdict. Within expected range /
+  Changed since 2016 / Can't judge excluded from the ranking and listed with
+  reasons in a collapsible section.
+- **Likely-fix mapping:** no setback -> "Reprogram BMS schedule (near zero cost)";
+  warm-day -> "Outdoor-temp heating lockout, check valves (low cost)";
+  exceedance only -> "Investigate controls and steam traps".
+- **View 2 Building detail:** verdict + CV(RMSE)/trust; actual-vs-expected chart
+  with 90% band (worst week default + week picker, top 12 worst weeks);
+  hour x day-of-week excess heatmap; monthly actual-vs-expected bars.
+- **Method / What we can't see / Data** sections, including the 89.5%
+  in-distribution vs 80.7% 2017 coverage finding and the BDG2 citation.
+
+### Accessibility
+Okabe-Ito colorblind-safe palette, left nav + main layout, keyboard-focusable
+table rows, ARIA labels on charts, plain-language labels.
+
+### Size
+Trimmed from 15.9 MB to 3.3 MB by keeping only the 12 worst weeks per building
+and compact time labels (Plotly stays on the CDN, not in the file).
+
+### GitHub Pages
+gh CLI not installed on this machine, so Pages must be enabled via the web UI
+(Settings -> Pages -> Source: Deploy from a branch -> main / docs).
+Expected URL: https://data-laur.github.io/Hackachusetts-Energy-Project/
