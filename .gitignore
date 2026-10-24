@@ -23,3 +23,9 @@ data/processed/
 
 # Generated report
 outputs/
+
+# Inbox: dropped data files and generated outputs are runtime artifacts. Keep
+# only the folder (.gitkeep); the stable demo reports live under samples/.
+inbox/*.csv
+inbox/results/
+inbox/mapping_report.md

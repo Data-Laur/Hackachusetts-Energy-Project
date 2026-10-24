@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Ingest dropped CSV",
+      "trigger": "PostFileCreate",
+      "description": "When a CSV is added to inbox/, detect its format, map columns to timestamp/building_id/steam_kwh, convert units, write inbox/mapping_report.md, and either stop (if ambiguous) or score the buildings into inbox/results/.",
+      "matcher": "inbox/.*\\.csv$",
+      "action": {
+        "type": "command",
+        "command": "python src/ingest.py"
+      }
+    }
+  ]
+}

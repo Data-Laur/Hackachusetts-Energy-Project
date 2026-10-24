@@ -237,3 +237,51 @@ Totals barely moved (confirmed-waste 2,554,579 -> 2,551,077 kWh, 0.14%),
 confirming it was an edge-case band bug, not a logic error in exceedance.
 All 9 properties pass after the fix. Regenerated predictions, ranking, and report.
 Kiro feature: test authoring + run-and-diagnose loop.
+
+## Entry — MCP source verification + bring-your-own-data workflow
+
+### 1. MCP (web fetch) — verifying assumptions from primary sources
+Intended to add a fetch MCP server at `.kiro/settings/mcp.json`:
+```json
+{"mcpServers":{"fetch":{"command":"uvx","args":["mcp-server-fetch"],
+ "env":{"FASTMCP_LOG_LEVEL":"ERROR"},"disabled":false,"autoApprove":["fetch"]}}}
+```
+Writing that path is blocked by a workspace permission rule, so the user needs to
+add it. I verified the two assumptions against primary sources regardless:
+
+- **Steam unit (BDG2):** CONFIRMED kWh. The BDG2 data paper (Miller et al. 2020,
+  Sci Data) Table 4 shows Hog steam was originally `lbsperhour`, and the paper
+  states all meter data was converted to kWh. Source:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC7591488/ (Tables 4–5). config.py
+  comment updated; no value change.
+- **CO2 emission factor:** EIA/EPA list 53.06 kg CO2/MMBtu for natural gas;
+  1 MMBtu = 293.07 kWh, so 0.1811 kg CO2/kWh. Updated config from 0.18 ->
+  0.1811. Source: https://www.eia.gov/environment/emissions/archive/coefficients.php
+- **Boiler efficiency:** NOT an EPA emissions quantity (it's site equipment), so
+  it can't be pinned from EPA; left as an editable 0.80 assumption with a note.
+
+Headline change after the 0.18 -> 0.1811 fix: Confirmed-waste CO2 573,992 ->
+**577,500 kg/yr** (+0.6%); dollars and verdict tiers unchanged (dollars key off
+gas price, not the emission factor). Reran stages 3–4; property tests still pass.
+
+What MCP made possible: letting the agent pull the actual EPA/EIA and BDG2 pages
+during the run to check numbers against primary sources, instead of relying on
+memorized constants — turning "probably ~0.18" into a cited 0.1811.
+
+### 2. Bring-your-own-data workflow
+- **samples/** (synthetic Bull-site data, each < 1 MB):
+  - `sample_A_long_mmbtu.csv` — long, "Date/Time","Bldg Name","Steam (MMBtu)"
+  - `sample_B_wide_kwh.csv` — wide, "Reading Time" + one kWh column per building
+  - `sample_C_ambiguous.csv` — long but value column is "Usage" (no unit)
+- **`src/ingest.py`** — detects long vs wide, maps columns to
+  timestamp/building_id/steam_kwh, converts MMBtu/kBTU -> kWh, writes
+  `inbox/mapping_report.md`, and STOPS on ambiguity instead of guessing;
+  otherwise scores buildings to `inbox/results/`.
+- **Agent hook** `.kiro/hooks/inbox-ingest.json` — PostFileCreate on
+  `inbox/.*\.csv$`, runs the ingester (file path read from the hook's stdin JSON).
+- **Tested** by copying A and C into inbox/:
+  - A -> long format, MMBtu x293.07 -> kWh, scored 3 buildings.
+  - C -> flagged AMBIGUOUS ("Usage" has no unit), stopped for review.
+  Saved both reports: `samples/mapping_report_sample_A.md`,
+  `samples/mapping_report_sample_C.md`. B also verified (wide, unit from filename).
+Kiro features used: MCP (web fetch) and agent hooks.

@@ -30,11 +30,13 @@ PROCESSED_DIR = "data/processed"
 # UNITS (for labeling everywhere)
 # ---------------------------------------------------------------------------
 
-# Steam meter readings are treated as energy in kWh per hour.
-# NOTE: VERIFY this against the BDG2 data dictionary before publishing. If it
-# turns out to be a different unit, change STEAM_UNIT and the conversion math is
-# still driven by the constants below, so the fix stays local.
-STEAM_UNIT = "kWh"          # energy per hourly reading
+# Steam meter readings are energy in kWh per hour. VERIFIED against the BDG2 data
+# paper (Miller et al. 2020, Sci Data): Table 4 shows Hog's steam was originally
+# measured in lbsperhour, and the paper states "All data were subsequently
+# converted to kWhsum or liters." So the published steam values are kWh — our
+# label is correct.
+# Source: https://pmc.ncbi.nlm.nih.gov/articles/PMC7591488/ (Tables 4–5)
+STEAM_UNIT = "kWh"          # energy per hourly reading (confirmed)
 TEMPERATURE_UNIT = "degC"    # airTemperature is in degrees Celsius (BDG2)
 
 # ---------------------------------------------------------------------------
@@ -139,11 +141,16 @@ HEATING_SEASON_MONTHS = [10, 11, 12, 1, 2, 3, 4]
 # 1 therm ~= 29.3 kWh). Source: U.S. EIA natural gas prices. Replace with your rate.
 GAS_PRICE_PER_KWH = 0.05       # US dollars per kWh of gas input
 
-# Boiler efficiency: how much delivered steam energy you get per unit of gas
-# burned. 0.80 (80%) is a common assumption for an older campus boiler.
-# Source: typical boiler efficiency range 0.75–0.85. Replace with your value.
+# Boiler efficiency: delivered steam energy per unit of gas burned. NOT an EPA
+# emissions quantity — it's a site-specific equipment parameter, so it can't be
+# pinned from the EPA factors. It stays an editable assumption. 0.80 (80%) is a
+# common mid-range figure for an older campus boiler (typical range ~0.75–0.85;
+# DOE/ENERGY STAR steam-system guidance). Replace with your measured value.
 BOILER_EFFICIENCY = 0.80       # fraction (delivered steam kWh / gas input kWh)
 
-# CO2 emission factor for natural gas combustion. ~0.18 kg CO2 per kWh of gas.
-# Source: U.S. EPA emission factors for natural gas (~53.1 kg CO2 per MMBtu).
-EMISSION_FACTOR_KG_PER_KWH = 0.18  # kg CO2 per kWh of gas input
+# CO2 emission factor for natural gas combustion. VERIFIED: EIA/EPA list
+# 53.06 kg CO2 per MMBtu for natural gas (HHV 1025–1050 Btu/scf). Converting:
+# 1 MMBtu = 293.07 kWh, so 53.06 / 293.07 = 0.1811 kg CO2 per kWh.
+# Source: https://www.eia.gov/environment/emissions/archive/coefficients.php
+# (EPA AP-42 1.4 Natural Gas Combustion gives the same ~53 kg/MMBtu figure.)
+EMISSION_FACTOR_KG_PER_KWH = 0.1811  # kg CO2 per kWh of gas input (was 0.18)
