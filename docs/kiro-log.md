@@ -499,3 +499,28 @@ human-in-the-loop catches).
 Added "Find which buildings waste heat, and what to fix first." under the Heat
 Check wordmark in the report top bar (small, muted, divider; hidden on phones
 <=720px) and as the first line of README.md.
+
+
+## Entry — Responsive UI fixes (report)
+
+Edited `src/report.py` and regenerated `docs/index.html`. Goal: fully responsive,
+no sideways scrolling at any width.
+
+- **Side menu:** narrowed to 200px; active item is solid darker teal (#0A7C6F)
+  with the white outline removed. On phones (<=720px) the menu becomes a top row.
+- **Headline cards:** even grid `repeat(auto-fit, minmax(180px,1fr))`, equal
+  heights (flex), 16px gaps, 20px padding; big numbers use `clamp()` so they
+  scale and never touch the edge. Labels shortened ("kWh/yr wasted",
+  "$/yr wasted").
+- **Table:** `table-layout: fixed` + cell wrapping (`overflow-wrap`) so it always
+  fits the viewport — `main`/`.body` use `min-width:0` so a wide table can't push
+  the page to scroll sideways. Building names drop the "Hog_" prefix. Default
+  columns: Building, Verdict, Why flagged (short tags: Above expected / Warm-day
+  heating / No setback / Level shift), Likely fix (short, full text on hover),
+  $/yr. A **Columns** button toggles optional columns (Type, Excess kWh, kg CO2,
+  CV(RMSE), Flagged by, Full likely fix), persisted in `localStorage` (try/catch
+  so it still works if storage is blocked). Below 900px each row becomes a
+  stacked card of the selected fields.
+- **Logo:** enlarged to 34px in the top bar.
+- Output escaping (esc/attr) added for safety. Still 3.3 MB, Plotly via CDN.
+  CI simulation + property tests still pass (11/11).

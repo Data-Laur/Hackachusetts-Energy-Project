@@ -245,7 +245,8 @@ def build_payload():
             {
                 "id": bid, "type": detail["type"], "verdict": detail["verdict"],
                 "flagged_by": detail["flagged_by"], "pattern": detail["pattern"],
-                "fix": detail["fix"], "excess_kwh": detail["excess_kwh"],
+                "fix": detail["fix"], "cvrmse": detail["cvrmse"],
+                "excess_kwh": detail["excess_kwh"],
                 "excess_dollars": detail["excess_dollars"],
                 "excess_co2_kg": detail["excess_co2_kg"],
             }
@@ -349,45 +350,79 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   /* Top bar with logo + wordmark. */
   header.topbar { display: flex; align-items: center; gap: .6rem; background: var(--ink);
     color: #fff; padding: .7rem 1.25rem; }
-  header.topbar img { width: 30px; height: 30px; display: block; }
+  header.topbar img { width: 34px; height: 34px; display: block; }
   header.topbar .wordmark { font-weight: 700; font-size: 1.15rem; letter-spacing: .01em; }
   header.topbar .tagline { color: #AFC0D6; font-size: .8rem; margin-left: .5rem;
     padding-left: .5rem; border-left: 1px solid #33496a; }
 
-  .body { display: flex; flex: 1; }
-  nav { width: 220px; background: var(--ink); padding: 1rem .75rem; flex-shrink: 0; }
+  .body { display: flex; flex: 1; min-width: 0; }
+  nav { width: 200px; background: var(--ink); padding: 1rem .75rem; flex-shrink: 0; }
   nav button { display: block; width: 100%; text-align: left; padding: .55rem .7rem;
-    margin-bottom: .25rem; border: 1px solid transparent; border-radius: 8px;
+    margin-bottom: .25rem; border: none; border-radius: 8px;
     background: none; font: inherit; font-size: .92rem; cursor: pointer;
     color: #D7E0EC; }
   nav button:hover { background: rgba(255,255,255,.08); color: #fff; }
+  /* Active nav: solid darker teal only, no outline. */
   nav button[aria-current="true"] { background: #0A7C6F; color: #ffffff;
-    font-weight: 600; }  /* darkened teal so white label clears 4.5:1 (5.09:1) */
+    font-weight: 600; }
   nav button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 
-  main { flex: 1; padding: 1.5rem 2rem; max-width: 1120px; }
+  /* min-width:0 lets this flex child shrink so wide tables never force the page
+     to scroll sideways. */
+  main { flex: 1; min-width: 0; padding: 1.5rem 2rem; max-width: 1120px; }
   h2 { margin-top: 0; }
 
+  /* Even grid, equal-height cards, 16px gaps, 20px padding. */
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
-           gap: 1rem; margin-bottom: 1.5rem; }
+           gap: 16px; margin-bottom: 1.5rem; align-items: stretch; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-          padding: 1rem 1.1rem; }
-  .card .num { font-size: 1.8rem; font-weight: 700; color: var(--ink);
-               font-variant-numeric: tabular-nums; }
-  .card .lbl { color: var(--muted); font-size: .85rem; }
+          padding: 20px; display: flex; flex-direction: column; min-width: 0; }
+  /* Big number scales to fit the card and never touches the edge. */
+  .card .num { font-size: clamp(1.1rem, 4.5vw, 1.9rem); font-weight: 700;
+               color: var(--ink); font-variant-numeric: tabular-nums;
+               line-height: 1.1; overflow-wrap: anywhere; }
+  .card .lbl { color: var(--muted); font-size: .85rem; margin-top: .25rem; }
   .card small { color: var(--muted); font-size: .72rem; display:block; margin-top:.3rem; }
 
-  table { border-collapse: collapse; width: 100%; font-size: .9rem;
-          font-variant-numeric: tabular-nums; }
+  .table-wrap { width: 100%; max-width: 100%; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed;
+          font-size: .9rem; font-variant-numeric: tabular-nums; }
   th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--border);
-           vertical-align: top; }
+           vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
   /* Right-align numeric columns for dense, readable figures. */
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  th { background: #EAF0F6; color: var(--ink); position: sticky; top: 0;
+  th { background: #EAF0F6; color: var(--ink);
        text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; }
   tbody tr { cursor: pointer; }
   tbody tr:hover { background: #EEF6F5; }
   tbody tr:focus { outline: 2px solid var(--teal); outline-offset: -2px; }
+
+  /* Column picker popover. */
+  .colpicker { position: relative; display: inline-block; }
+  .colpicker .menu { position: absolute; z-index: 20; top: 110%; left: 0;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: .6rem .8rem; box-shadow: 0 6px 20px rgba(11,37,69,.12);
+    min-width: 210px; }
+  .colpicker .menu label { display: flex; gap: .5rem; align-items: center;
+    font-size: .88rem; color: var(--body-text); padding: .2rem 0; cursor: pointer; }
+  .colpicker .menu[hidden] { display: none; }
+
+  /* Short "why flagged" tags. */
+  .tags { display: flex; flex-wrap: wrap; gap: .25rem; }
+  .tag { display: inline-block; background: #EEF2F7; color: #324; color: var(--ink);
+    border: 1px solid var(--border); border-radius: 6px; padding: .05rem .4rem;
+    font-size: .72rem; white-space: nowrap; }
+
+  /* Stacked card view (used below 900px). Hidden by default. */
+  .stack { display: none; }
+  .stack .srow { background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; }
+  .stack .srow:focus { outline: 2px solid var(--teal); }
+  .stack .srow .sline { display: flex; justify-content: space-between; gap: .75rem;
+    padding: .15rem 0; font-size: .88rem; }
+  .stack .srow .sline .k { color: var(--muted); }
+  .stack .srow .sname { font-weight: 600; color: var(--ink); margin-bottom: .3rem;
+    overflow-wrap: anywhere; }
 
   /* Badges: small text, so backgrounds use slightly darker shades of the brand
      hues so WHITE text clears 4.5:1 (amber keeps dark text). The palette's base
@@ -419,14 +454,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .back { margin-bottom: 1rem; }
   .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 
-  /* Phone layout: stack nav on top, single-column cards, hide the tagline so it
-     doesn't crowd the header. */
+  /* Below 900px: swap the table for stacked cards (no sideways scroll). */
+  @media (max-width: 900px) {
+    .table-wrap { display: none; }
+    .stack { display: block; }
+  }
+
+  /* Phone layout: nav becomes a top bar, hide the tagline so the header fits. */
   @media (max-width: 720px) {
     .body { flex-direction: column; }
     nav { width: 100%; display: flex; flex-wrap: wrap; gap: .25rem; }
     nav button { width: auto; flex: 1 1 auto; text-align: center; }
     main { padding: 1rem; }
     header.topbar .tagline { display: none; }
+    header.topbar { padding: .7rem 1rem; }
   }
 </style>
 </head>
@@ -457,8 +498,84 @@ const BADGE = {
   "Within expected range":"b-within","Changed since 2016":"b-changed","Can't judge":"b-cant"
 };
 function badge(v){ return `<span class="badge ${BADGE[v]||''}">${v}</span>`; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function attr(s){ return esc(s).replace(/'/g,'&#39;'); }
 
-let state = { type:"All", verdict:"All", building:null };
+// Drop the "Hog_" site prefix from building names (site is already stated).
+function shortName(id){ return String(id).replace(/^Hog_/, ''); }
+
+// Short "why flagged" tags from the flagged_by string.
+function whyTags(r){
+  const f = (r.flagged_by||'').toLowerCase();
+  const tags = [];
+  if(f.includes('exceedance')) tags.push('Above expected');
+  if(f.includes('warm day') || f.includes('warm-day')) tags.push('Warm-day heating');
+  if(f.includes('setback')) tags.push('No setback');
+  if(f.includes('level shift')) tags.push('Level shift');
+  if(!tags.length) tags.push('—');
+  return tags;
+}
+
+// Column definitions. "Default" ones show on load; the rest are opt-in.
+const COLUMNS = [
+  { key:'building', label:'Building', def:true,  always:true },
+  { key:'verdict',  label:'Verdict',  def:true,  always:true },
+  { key:'why',      label:'Why flagged', def:true },
+  { key:'fix',      label:'Likely fix', def:true },
+  { key:'dollars',  label:'$/yr', def:true, num:true },
+  { key:'type',     label:'Type', def:false },
+  { key:'kwh',      label:'Excess kWh', def:false, num:true },
+  { key:'co2',      label:'kg CO2', def:false, num:true },
+  { key:'cvrmse',   label:'CV(RMSE)', def:false, num:true },
+  { key:'method',   label:'Flagged by (method)', def:false },
+  { key:'fixfull',  label:'Full likely fix', def:false },
+];
+const COL_STORE_KEY = 'heatcheck.columns.v1';
+
+function loadCols(){
+  // Defaults, overridden by a saved choice when storage is available.
+  let chosen = COLUMNS.filter(c=>c.def).map(c=>c.key);
+  try {
+    const raw = localStorage.getItem(COL_STORE_KEY);
+    if(raw){ const saved = JSON.parse(raw); if(Array.isArray(saved) && saved.length) chosen = saved; }
+  } catch(e){ /* storage blocked — fall back to defaults */ }
+  return new Set(chosen);
+}
+function saveCols(set){
+  try { localStorage.setItem(COL_STORE_KEY, JSON.stringify([...set])); }
+  catch(e){ /* storage blocked — in-memory only */ }
+}
+
+let state = { type:"All", verdict:"All", building:null, cols:null };
+function colSet(){ if(!state.cols) state.cols = loadCols(); return state.cols; }
+
+// Cell value for a column key, as HTML.
+function cellHTML(r, key){
+  switch(key){
+    case 'building': return esc(shortName(r.id));
+    case 'verdict':  return badge(r.verdict);
+    case 'why':      return `<span class="tags">${whyTags(r).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</span>`;
+    case 'fix':      return `<span title="${attr(r.fix)}">${esc(shortFix(r.fix))}</span>`;
+    case 'fixfull':  return esc(r.fix);
+    case 'dollars':  return fmt(r.excess_dollars);
+    case 'type':     return esc(r.type);
+    case 'kwh':      return fmt(r.excess_kwh);
+    case 'co2':      return fmt(r.excess_co2_kg);
+    case 'cvrmse':   return (r.cvrmse==null?'—':r.cvrmse+'%');
+    case 'method':   return esc(r.flagged_by);
+    default: return '';
+  }
+}
+// A few-word version of the likely fix (full text shown on hover).
+function shortFix(fix){
+  if(!fix) return '—';
+  const map = {
+    'Reprogram BMS schedule (near zero cost)':'BMS schedule',
+    'Outdoor-temp heating lockout, check valves (low cost)':'Temp lockout + valves',
+    'Investigate controls and steam traps':'Check controls/traps',
+  };
+  return map[fix] || fix.split(/[(,]/)[0].trim();
+}
 
 function show(view){
   ["triage","detail","method","limits","data"].forEach(v=>{
@@ -481,54 +598,105 @@ function renderTriage(){
     (state.type==="All"||r.type===state.type) &&
     (state.verdict==="All"||r.verdict===state.verdict));
 
+  const cols = colSet();
+  const active = COLUMNS.filter(cd => cd.always || cols.has(cd.key));
+
   const html = `
   <p class="eyebrow">Campus overview</p>
   <h2>Triage</h2>
   <p class="meta-line">Which buildings waste heat, ranked by evidence strength. Click any row for detail.</p>
   <div class="cards">
     <div class="card"><div class="num">${fmt(c.confirmed_count)}</div><div class="lbl">Confirmed waste buildings</div></div>
-    <div class="card"><div class="num">${money(Math.round(c.confirmed_dollars))}/yr</div><div class="lbl">Confirmed waste cost</div><small>conservative: energy above the 90% upper bound</small></div>
-    <div class="card"><div class="num">${fmt(Math.round(c.confirmed_kwh))}</div><div class="lbl">kWh/yr (Confirmed waste)</div><small>conservative: energy above the 90% upper bound</small></div>
+    <div class="card"><div class="num">${money(Math.round(c.confirmed_dollars))}/yr</div><div class="lbl">$/yr wasted</div><small>conservative: energy above the 90% upper bound</small></div>
+    <div class="card"><div class="num">${fmt(Math.round(c.confirmed_kwh))}</div><div class="lbl">kWh/yr wasted</div><small>conservative: energy above the 90% upper bound</small></div>
     <div class="card"><div class="num">${fmt(c.worth_count)}</div><div class="lbl">Worth a look</div></div>
     <div class="card"><div class="num">${fmt(c.cant_judge_count)}</div><div class="lbl">Can't judge</div></div>
   </div>
   <div class="filters">
     <div><label for="f-type">Building type</label>
       <select id="f-type" onchange="state.type=this.value; renderTriage()">
-        ${types.map(t=>`<option ${t===state.type?'selected':''}>${t}</option>`).join('')}
+        ${types.map(t=>`<option ${t===state.type?'selected':''}>${esc(t)}</option>`).join('')}
       </select></div>
     <div><label for="f-verdict">Verdict</label>
       <select id="f-verdict" onchange="state.verdict=this.value; renderTriage()">
-        ${verdicts.map(v=>`<option ${v===state.verdict?'selected':''}>${v}</option>`).join('')}
+        ${verdicts.map(v=>`<option ${v===state.verdict?'selected':''}>${esc(v)}</option>`).join('')}
       </select></div>
+    <div class="colpicker">
+      <label>&nbsp;</label>
+      <button class="btn" aria-expanded="false" onclick="toggleColMenu(event)">Columns ▾</button>
+      <div class="menu" id="col-menu" hidden>
+        ${COLUMNS.filter(cd=>!cd.always).map(cd=>`
+          <label><input type="checkbox" ${cols.has(cd.key)?'checked':''}
+            onchange="toggleCol('${cd.key}', this.checked)"> ${esc(cd.label)}</label>`).join('')}
+      </div>
+    </div>
   </div>
-  <table>
-    <thead><tr>
-      <th scope="col">Building</th><th scope="col">Type</th><th scope="col">Verdict</th>
-      <th scope="col">Flagged by</th><th scope="col">Pattern</th><th scope="col">Likely fix</th>
-      <th scope="col" class="num">Excess kWh</th><th scope="col" class="num">$/yr</th><th scope="col" class="num">kg CO2/yr</th>
-    </tr></thead>
-    <tbody>
-    ${rows.map(r=>`
-      <tr tabindex="0" role="button" onclick="openBuilding('${r.id}')" onkeydown="if(event.key==='Enter')openBuilding('${r.id}')">
-        <td>${r.id}</td><td>${r.type}</td><td>${badge(r.verdict)}</td>
-        <td>${r.flagged_by}</td><td>${r.pattern}</td><td>${r.fix}</td>
-        <td class="num">${fmt(r.excess_kwh)}</td><td class="num">${fmt(r.excess_dollars)}</td><td class="num">${fmt(r.excess_co2_kg)}</td>
-      </tr>`).join('')}
-    </tbody>
-  </table>
-  ${rows.length===0?'<p>No buildings match these filters.</p>':''}
-  <details>
-    <summary>Buildings we don't rank (${DATA.others.length}) — and why</summary>
+
+  <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Building</th><th scope="col">Type</th><th scope="col">Verdict</th><th scope="col">Reason</th></tr></thead>
+      <thead><tr>
+        ${active.map(cd=>`<th scope="col" class="${cd.num?'num':''}">${esc(cd.label)}</th>`).join('')}
+      </tr></thead>
       <tbody>
-      ${DATA.others.map(o=>`<tr><td>${o.id}</td><td>${o.type}</td><td>${badge(o.verdict)}</td><td>${o.reason}</td></tr>`).join('')}
+      ${rows.map(r=>`
+        <tr tabindex="0" role="button" onclick="openBuilding('${attr(r.id)}')" onkeydown="if(event.key==='Enter')openBuilding('${attr(r.id)}')">
+          ${active.map(cd=>`<td class="${cd.num?'num':''}">${cellHTML(r, cd.key)}</td>`).join('')}
+        </tr>`).join('')}
       </tbody>
     </table>
+    ${rows.length===0?'<p>No buildings match these filters.</p>':''}
+  </div>
+
+  <div class="stack">
+    ${rows.length===0?'<p>No buildings match these filters.</p>':''}
+    ${rows.map(r=>`
+      <div class="srow" tabindex="0" role="button" onclick="openBuilding('${attr(r.id)}')" onkeydown="if(event.key==='Enter')openBuilding('${attr(r.id)}')">
+        <div class="sname">${esc(shortName(r.id))} ${badge(r.verdict)}</div>
+        ${active.filter(cd=>cd.key!=='building'&&cd.key!=='verdict').map(cd=>`
+          <div class="sline"><span class="k">${esc(cd.label)}</span><span>${cellHTML(r, cd.key)}</span></div>`).join('')}
+      </div>`).join('')}
+  </div>
+
+  <details>
+    <summary>Buildings we don't rank (${DATA.others.length}) — and why</summary>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Building</th><th scope="col">Type</th><th scope="col">Verdict</th><th scope="col">Reason</th></tr></thead>
+        <tbody>
+        ${DATA.others.map(o=>`<tr><td>${esc(shortName(o.id))}</td><td>${esc(o.type)}</td><td>${badge(o.verdict)}</td><td>${esc(o.reason)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="stack">
+      ${DATA.others.map(o=>`
+        <div class="srow">
+          <div class="sname">${esc(shortName(o.id))} ${badge(o.verdict)}</div>
+          <div class="sline"><span class="k">Type</span><span>${esc(o.type)}</span></div>
+          <div class="sline"><span class="k">Reason</span><span>${esc(o.reason)}</span></div>
+        </div>`).join('')}
+    </div>
   </details>`;
   document.getElementById("main").innerHTML = html;
 }
+
+function toggleColMenu(ev){
+  ev.stopPropagation();
+  const m = document.getElementById('col-menu');
+  if(m) m.hidden = !m.hidden;
+}
+function toggleCol(key, on){
+  const s = colSet();
+  if(on) s.add(key); else s.delete(key);
+  saveCols(s);
+  renderTriage();
+  // Re-open the menu after re-render so multiple toggles are easy.
+  const m = document.getElementById('col-menu'); if(m) m.hidden = false;
+}
+// Close the column menu when clicking elsewhere.
+document.addEventListener('click', e=>{
+  const m = document.getElementById('col-menu');
+  if(m && !m.hidden && !e.target.closest('.colpicker')) m.hidden = true;
+});
 
 function openBuilding(id){ state.building = id; show('detail'); }
 
@@ -541,7 +709,7 @@ function renderDetail(){
   const picker = b.weeks.map((w,i)=>`<option value="${i}" ${i===b.worst_week?'selected':''}>${w.label}${i===b.worst_week?' (worst week)':''}</option>`).join('');
   main.innerHTML = `
     <div class="back"><button class="btn" onclick="show('triage')">&larr; Back to triage</button></div>
-    <h2>${b.id}</h2>
+    <h2>${esc(shortName(b.id))}</h2>
     <p class="meta-line">${b.type} · ${badge(b.verdict)} ·
       Model trust: ${b.trustworthy?'trustworthy':'not trustworthy'}${b.cvrmse!=null?` (CV(RMSE) ${b.cvrmse}%)`:''} ·
       Likely fix: <strong>${b.fix}</strong></p>
