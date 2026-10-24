@@ -32,6 +32,8 @@ if REPO_ROOT not in sys.path:
 import config  # noqa: E402
 from waste_detect import money_and_co2  # noqa: E402
 from src.ingest import detect_and_map, to_long_kwh  # noqa: E402
+import climate as climate_mod  # noqa: E402
+from waste_detect import build_ranking  # noqa: E402
 
 PROCESSED = config.PROCESSED_DIR
 RANKED_TIERS = {"Confirmed waste", "Worth a look", "Within expected range",
@@ -244,3 +246,54 @@ def test_warmday_threshold_applied_to_celsius(temps_f):
         # And on the disagreeing positions, the ingester matches Celsius truth.
         assert np.array_equal(warm_from_ingester[disagree],
                               warm_from_true_celsius[disagree])
+
+
+# ----------------------- Requirement 3 (warm climate -> no warm-day flag) ---
+
+def _synthetic_site(mean_temp_c, n_buildings=4, hours=24 * 120):
+    """
+    Build minimal (clean, preds, scores) frames for a site whose outdoor
+    temperature averages mean_temp_c over the (heating-season) window, with
+    heavy warm-day steam so warm-day WOULD flag if the climate gate were off.
+    """
+    start = pd.Timestamp("2017-01-01")
+    ts = pd.date_range(start, periods=hours, freq="h")
+    # Flat temperature at mean_temp_c keeps the heating-season mean exact.
+    clean_rows, pred_rows, score_rows = [], [], []
+    rng = np.random.default_rng(0)
+    for i in range(n_buildings):
+        bid = f"B{i}"
+        steam = rng.uniform(50, 150, size=hours)  # always-on steam, even when warm
+        clean_rows.append(pd.DataFrame({
+            "timestamp": ts, "building_id": bid, "steam": steam,
+            "airTemperature": float(mean_temp_c), "bad_data": False,
+        }))
+        # Minimal predictions (not trustworthy -> exceedance path stays empty).
+        pred_rows.append(pd.DataFrame({
+            "timestamp": ts, "building_id": bid,
+            "actual": steam, "expected": steam,
+            "lower90": steam - 1, "upper90": steam + 1,
+        }))
+        score_rows.append({"building_id": bid, "cvrmse": 0.5, "trustworthy": False})
+    clean = pd.concat(clean_rows, ignore_index=True)
+    preds = pd.concat(pred_rows, ignore_index=True)
+    scores = pd.DataFrame(score_rows)
+    return clean, preds, scores
+
+
+@given(mean_temp_c=st.floats(min_value=config.CLIMATE_WARM_CUTOFF_C + 0.5,
+                             max_value=35.0, allow_nan=False))
+@settings(max_examples=25, deadline=None)
+def test_warm_climate_never_gets_warmday_flag(mean_temp_c):
+    """
+    Req 3 (climate-aware): a site classified as WARM must never receive a
+    warm-day waste flag, regardless of how much warm-day steam it uses — in warm
+    climates steam may serve hot water, reheat, or cooling.
+    """
+    # Sanity: this mean really classifies as warm.
+    assert climate_mod.climate_flag(mean_temp_c) == "warm"
+    clean, preds, scores = _synthetic_site(mean_temp_c)
+    ranking = build_ranking(clean, preds, scores)
+    assert not ranking["flag_warm_day"].any()
+    # And no building is flagged "heating on warm days" in flagged_by.
+    assert not ranking["flagged_by"].str.contains("warm day", case=False).any()

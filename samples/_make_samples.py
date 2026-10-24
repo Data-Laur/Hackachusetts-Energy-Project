@@ -62,13 +62,18 @@ def main():
 
     ts = steam["timestamp"].dt.strftime("%Y-%m-%d %H:%M")
 
-    # --- Sample A: long, MMBtu + Fahrenheit temperature ---
+    # Bull is the Austin, TX campus in BDG2 — include coordinates so the
+    # ingester can label the city and classify the climate (warm).
+    BULL_LAT, BULL_LNG = 30.27, -97.74
+
+    # --- Sample A: long, MMBtu + Fahrenheit temperature + coordinates ---
     rows = []
     for b in a_bldgs:
         mmbtu = (steam[b] * KWH_TO_MMBTU).round(5)
         for t, v, tf in zip(ts, mmbtu, temp_f):
             rows.append({"Date/Time": t, "Bldg Name": b,
-                         "Steam (MMBtu)": v, "Outdoor Temp (F)": tf})
+                         "Steam (MMBtu)": v, "Outdoor Temp (F)": tf,
+                         "Latitude": BULL_LAT, "Longitude": BULL_LNG})
     pd.DataFrame(rows).to_csv("samples/sample_A_long_mmbtu.csv", index=False)
 
     # --- Sample B: wide, kWh + Fahrenheit temperature column ---

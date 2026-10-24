@@ -78,6 +78,13 @@ NORMALIZE_FLOOR_KWH = 5.0
 WARM_DAY_TEMP_C = 18.0         # outdoor temp above this (degC) = "warm day";
                                # heating during these hours is suspicious
 
+# Climate classification. A site is "warm" if its mean heating-season (Oct-Apr)
+# outdoor temperature is above this cutoff, else "cold". Warm-day waste flags are
+# only reliable for heating-only steam in COLD climates — in warm climates steam
+# may serve hot water, reheat, or absorption cooling, so we don't flag it there.
+# For reference: Hog (Minneapolis) ~1.7 C = cold; Bull (Austin) ~17.3 C = warm.
+CLIMATE_WARM_CUTOFF_C = 10.0
+
 # Rolling-temperature feature: buildings have thermal mass, so recent average
 # temperature matters, not just the current hour. We use a 24-hour rolling mean.
 TEMP_ROLLING_HOURS = 24

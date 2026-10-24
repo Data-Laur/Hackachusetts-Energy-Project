@@ -454,3 +454,48 @@ thermometer with a thick navy (#0B2545) outline, teal (#0E9F8F) fill, a small
 solid ember (#E4572E) cap at the top of the fill, and a white checkmark inside a
 round navy bulb. No tick marks, no flame. Used as the top-bar mark beside the
 "Heat Check" wordmark and as the favicon.
+
+
+## Entry — Climate-aware warm-day check, README, tagline
+
+### 1. mcp.example.json committed
+The user created `.kiro/settings/mcp.example.json` (portable, plain `uvx`);
+staged and committed it.
+
+### 2. Climate-aware warm-day check
+Steam on warm days is not always waste — in warm climates it may serve hot
+water, reheat, or absorption cooling.
+- `climate.py`: offline city label via `reverse_geocoder` (no API) and a
+  cold/warm flag from mean heating-season (Oct-Apr) temperature.
+- `config.CLIMATE_WARM_CUTOFF_C = 10.0`. Measured means: Hog (Minneapolis)
+  1.7 C -> cold; Bull (Austin) 17.3 C -> warm.
+- Ingester: detects Latitude/Longitude columns (excluded from value detection),
+  labels the city, classifies climate, and shows `pct_hours_above_18c` next to
+  `warm_day_share_pct`. For WARM sites the warm-day result is labeled "Not
+  reliable in a warm climate: steam may serve hot water, reheat, or cooling" and
+  `warm_day_flag` is False (not a waste flag). Verified on sample A: Austin,
+  Texas / warm / 55.3% hours >18 C / flag False.
+- `waste_detect.py`: added a climate gate — if the site's mean heating-season
+  temp is warm, `flag_warm_day` is forced False. Hog is cold, so its results are
+  unchanged (still 20 warm-day flags; tiers identical).
+- `docs/what-we-cant-see.md`: added the cold-climate reliability note (Hog is in
+  the Minneapolis area, a cold climate).
+- Property test `test_warm_climate_never_gets_warmday_flag`: warm-climate sites
+  never get a warm-day flag. It also surfaced a latent bug — `level_shift_report`
+  returned a column-less empty frame when no building exceeded, crashing a merge;
+  fixed to always return the expected columns. Tests now 11/11.
+
+### 3. Full README (task 7)
+Wrote README.md: tagline first line; problem & why it matters; what Heat Check
+does; live demo link; how to run (download + one-command stages + report); try
+your own data (samples/ + inbox/); method (baseline, conformal, ASHRAE gate,
+tiers, climate-aware); results headline (10 Confirmed waste, ~2,551,077 kWh,
+~$159,442, ~575,587 kg CO2); what we can't see; BDG2 citation; and a "How I used
+Kiro" section (specs, steering incl. manual copilot, both hooks, MCP robots.txt
++ 52.91 factor, property-based testing incl. the band-ordering bug, and
+human-in-the-loop catches).
+
+### 4. Tagline
+Added "Find which buildings waste heat, and what to fix first." under the Heat
+Check wordmark in the report top bar (small, muted, divider; hidden on phones
+<=720px) and as the first line of README.md.

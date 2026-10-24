@@ -120,7 +120,11 @@ def level_shift_report(preds):
         )
         rows.append({"building_id": building_id, "n_months": n_months,
                      "n_hours": n_hours, "is_level_shift": is_level_shift})
-    return pd.DataFrame(rows)
+    # Always return a frame with the expected columns, even if no building had
+    # any exceedance (otherwise a later merge on building_id would fail).
+    return pd.DataFrame(
+        rows, columns=["building_id", "n_months", "n_hours", "is_level_shift"]
+    )
 
 
 def money_and_co2(excess_kwh):
@@ -258,6 +262,15 @@ def build_ranking(clean, preds, scores):
         (pat["warm_day_kwh"] >= warm_cut)
         & (pat["warm_day_share"] >= config.WARMDAY_MIN_ANNUAL_SHARE)
     )
+    # Climate gate: the warm-day flag is only reliable for heating-only steam in
+    # a COLD climate. In a warm climate, warm-day steam may serve hot water,
+    # reheat, or absorption cooling, so we NEVER raise a warm-day waste flag.
+    import climate as climate_mod
+    site_climate = climate_mod.climate_flag(
+        climate_mod.mean_heating_season_temp(clean)
+    )
+    if site_climate == "warm":
+        pat["flag_warm_day"] = False
 
     # --- Merge the two methods on building_id ---
     out = pat.merge(exc, on="building_id", how="outer")

@@ -29,4 +29,7 @@ Per-building outcome:
   - Pattern checks only: a full model needs 12+ months of data: 3 building(s)
 
 ### Weather
-This file INCLUDED an outdoor-temperature column ('Outdoor Temp (F)', converted F -> C), so the temperature-based pattern checks (setback + warm-day) ran. `setback_ratio` near/above 1.0 means little night/weekend setback; `warm_day_share_pct` is the share of steam used when it's warmer than 18 C outside.
+This file INCLUDED an outdoor-temperature column ('Outdoor Temp (F)', converted F -> C), so the temperature-based pattern checks (setback + warm-day) ran. `setback_ratio` near/above 1.0 means little night/weekend setback; `warm_day_share_pct` is the share of steam used when warmer than 18 C outside, shown next to `pct_hours_above_18c` for context.
+
+### Climate
+Site classified **warm** (Austin, Texas). Warm-day results are labeled "Not reliable in a warm climate: steam may serve hot water, reheat, or cooling" and are NOT counted as a waste flag.

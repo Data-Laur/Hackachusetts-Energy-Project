@@ -3,6 +3,12 @@
 Honest limits of the Heat Check analysis. These feed the report's limitations
 section (task 4). Units: steam in kWh, temperature in °C.
 
+- **Warm-day flags are most reliable for heating-only steam systems in cold
+  climates. Our main site (Hog) is in the Minneapolis area, a cold climate.** In
+  warm climates, steam on warm days may serve hot water, reheat, or absorption
+  cooling rather than space heating, so Heat Check does not raise a warm-day
+  waste flag for sites it classifies as warm.
+
 - **Year-over-year drift limits accuracy.** Our 90% prediction bands cover 80.7%
   of 2017 hours, but an in-distribution control (calibrate on half the 2016
   holdout weeks, test on the other half) covers 89.5% — right on target. That gap

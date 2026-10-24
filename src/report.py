@@ -351,7 +351,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     color: #fff; padding: .7rem 1.25rem; }
   header.topbar img { width: 30px; height: 30px; display: block; }
   header.topbar .wordmark { font-weight: 700; font-size: 1.15rem; letter-spacing: .01em; }
-  header.topbar .tagline { color: #AFC0D6; font-size: .8rem; margin-left: .25rem; }
+  header.topbar .tagline { color: #AFC0D6; font-size: .8rem; margin-left: .5rem;
+    padding-left: .5rem; border-left: 1px solid #33496a; }
 
   .body { display: flex; flex: 1; }
   nav { width: 220px; background: var(--ink); padding: 1rem .75rem; flex-shrink: 0; }
@@ -418,12 +419,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .back { margin-bottom: 1rem; }
   .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 
-  /* Phone layout: stack nav on top, single-column cards. */
+  /* Phone layout: stack nav on top, single-column cards, hide the tagline so it
+     doesn't crowd the header. */
   @media (max-width: 720px) {
     .body { flex-direction: column; }
     nav { width: 100%; display: flex; flex-wrap: wrap; gap: .25rem; }
     nav button { width: auto; flex: 1 1 auto; text-align: center; }
     main { padding: 1rem; }
+    header.topbar .tagline { display: none; }
   }
 </style>
 </head>
@@ -432,7 +435,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <header class="topbar">
     <img src="assets/logo.svg" alt="" />
     <span class="wordmark">Heat Check</span>
-    <span class="tagline">campus heating triage</span>
+    <span class="tagline">Find which buildings waste heat, and what to fix first.</span>
   </header>
   <div class="body">
     <nav aria-label="Main">

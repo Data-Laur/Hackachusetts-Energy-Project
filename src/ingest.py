@@ -32,6 +32,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
+import config  # noqa: E402  (repo-root module; path set above)
+
 # Unit conversions into kWh.
 MMBTU_TO_KWH = 293.07122       # 1 MMBtu = 293.07 kWh
 KBTU_TO_KWH = 0.29307122       # 1 kBTU  = 0.293 kWh
@@ -40,6 +42,21 @@ TIME_HINTS = ["date/time", "reading time", "timestamp", "time", "datetime"]
 BUILDING_HINTS = ["bldg name", "building", "building_id", "name", "bldg"]
 # Outdoor-temperature column hints.
 TEMP_HINTS = ["outdoor temp", "air temp", "airtemperature", "temperature", "temp"]
+# Coordinate column hints (for climate classification).
+LAT_HINTS = ["latitude", "lat"]
+LNG_HINTS = ["longitude", "lng", "lon", "long"]
+
+
+def _find_coords(df):
+    """Return (lat, lng) from the first row if coordinate columns exist, else None."""
+    lat_col = _find(df.columns, LAT_HINTS)
+    lng_col = _find(df.columns, LNG_HINTS)
+    if lat_col and lng_col:
+        try:
+            return float(df[lat_col].iloc[0]), float(df[lng_col].iloc[0])
+        except (ValueError, TypeError, IndexError):
+            return None
+    return None
 # Value column name -> unit. Only used when the unit is explicit.
 UNIT_PATTERNS = {
     "kwh": 1.0,
@@ -94,12 +111,18 @@ def detect_and_map(df):
             f"Found outdoor temperature column '{temp_col}' "
             f"({'Fahrenheit -> converting to Celsius' if temp_is_f else 'Celsius'})."
         )
+    # Coordinate columns (for climate) are metadata, not steam/building columns —
+    # exclude them from value-column detection.
+    lat_col = _find(cols, LAT_HINTS)
+    lng_col = _find(cols, LNG_HINTS)
+    coord_cols = [c for c in (lat_col, lng_col) if c]
+    # Set of columns that are NOT a steam value.
+    non_value = set([time_col, building_col, temp_col] + coord_cols)
 
     # LONG format: time column, a building-name column, and one value column
-    # (temperature, if present, is excluded from the value-column count).
+    # (temperature + coordinates, if present, are excluded from the count).
     if time_col and building_col:
-        value_candidates = [c for c in cols
-                            if c not in (time_col, building_col, temp_col)]
+        value_candidates = [c for c in cols if c not in non_value]
         if len(value_candidates) != 1:
             return {"format": "long", "ambiguous": True,
                     "reasons": reasons + [f"Expected exactly one value column, "
@@ -131,7 +154,7 @@ def detect_and_map(df):
     # WIDE format: a time column plus one numeric column per building (and maybe
     # a temperature column, which we exclude from the building columns).
     if time_col and not building_col:
-        value_cols = [c for c in cols if c not in (time_col, temp_col)]
+        value_cols = [c for c in cols if c not in non_value]
         unit, factor = _unit_from_name(" ".join(value_cols))
         if unit is None:
             reasons.append(
@@ -290,7 +313,7 @@ def _methods_for(hours, has_weather):
     return label, methods
 
 
-def score(long_df, path, has_weather=False):
+def score(long_df, path, has_weather=False, coords=None):
     """
     Score the ingested buildings.
 
@@ -314,21 +337,43 @@ def score(long_df, path, has_weather=False):
     # Pattern checks use the same logic as the main pipeline.
     from waste_detect import setback_ratio, warm_day_heating
 
+    import climate as climate_mod
+
     has_temp = has_weather and "airTemperature" in long_df.columns
+
+    # Classify the site's climate once (city label from coords, flag from the
+    # file's own heating-season temperature).
+    lat, lng = (coords if coords else (None, None))
+    city, clim, mean_temp = climate_mod.classify_site(lat, lng, df=long_df)
+
     rows = []
     for bid, g in long_df.groupby("building_id"):
         s = g["steam_kwh"]
         hours = int(s.size)
         label, methods = _methods_for(hours, has_temp)
 
-        setback = warm_share = warm_kwh = None
-        # Run the real pattern checks when we have temperature + enough data.
+        setback = warm_share = warm_kwh = hot_share = None
+        warm_day_flag = False
+        warm_day_note = ""
         if has_temp and hours >= PATTERN_MIN_HOURS:
             grp = g.rename(columns={"steam_kwh": "steam"})[
                 ["timestamp", "steam", "airTemperature"]
             ]
             setback = setback_ratio(grp)
             warm_kwh, warm_share = warm_day_heating(grp)
+            # Share of HOURS above the warm-day threshold (context for the share
+            # of steam) — shown next to warm_day_share.
+            temp = grp["airTemperature"].dropna()
+            hot_share = (float((temp > config.WARM_DAY_TEMP_C).mean())
+                         if len(temp) else None)
+            # Warm-day is only a WASTE flag in a COLD climate. In a warm climate,
+            # steam on warm days may serve hot water, reheat, or cooling.
+            if clim == "warm":
+                warm_day_note = ("Not reliable in a warm climate: steam may serve "
+                                 "hot water, reheat, or cooling")
+            else:
+                warm_day_flag = (warm_share is not None
+                                 and warm_share >= config.WARMDAY_MIN_ANNUAL_SHARE)
 
         rows.append({
             "building_id": bid,
@@ -337,10 +382,16 @@ def score(long_df, path, has_weather=False):
             "total_steam_kwh": round(float(s.sum()), 1),
             "pct_missing": round(float(s.isna().mean()) * 100, 1),
             "pct_zero": round(float((s == 0).mean()) * 100, 1),
+            "city": city or "",
+            "climate": clim,
             "setback_ratio": (None if setback is None else round(float(setback), 2)),
+            "pct_hours_above_18c": (None if hot_share is None
+                                    else round(hot_share * 100, 1)),
             "warm_day_kwh": (None if warm_kwh is None else round(float(warm_kwh), 1)),
             "warm_day_share_pct": (None if warm_share is None
                                    else round(float(warm_share) * 100, 1)),
+            "warm_day_flag": warm_day_flag,
+            "warm_day_note": warm_day_note,
             "scored_as": label,
             "methods_run": "; ".join(methods) if methods else "none",
         })
@@ -376,9 +427,29 @@ def process(path):
     # If the file carried a temperature column, weather is available for the
     # temperature-dependent checks.
     has_weather = bool(mapping.get("temp_col"))
-    out_path, summary = score(long_df, path, has_weather=has_weather)
+    # Coordinates (if present) enable city labeling + climate classification.
+    coords = _find_coords(df)
+    out_path, summary = score(long_df, path, has_weather=has_weather, coords=coords)
     labels = summary["scored_as"].value_counts().to_dict()
     label_lines = "\n".join(f"  - {k}: {v} building(s)" for k, v in labels.items())
+    # Climate line (same for all buildings in a file).
+    clim = summary["climate"].iloc[0] if len(summary) else "unknown"
+    city = summary["city"].iloc[0] if len(summary) else ""
+    climate_note = ""
+    if clim != "unknown":
+        where = f" ({city})" if city else ""
+        if clim == "warm":
+            climate_note = (
+                f"\n\n### Climate\nSite classified **warm**{where}. Warm-day "
+                "results are labeled \"Not reliable in a warm climate: steam may "
+                "serve hot water, reheat, or cooling\" and are NOT counted as a "
+                "waste flag."
+            )
+        else:
+            climate_note = (
+                f"\n\n### Climate\nSite classified **cold**{where}. Warm-day "
+                "flags are treated as reliable here."
+            )
     if has_weather:
         weather_note = (
             "### Weather\n"
@@ -387,8 +458,8 @@ def process(path):
             f"{', converted F -> C' if mapping.get('temp_is_f') else ''}), so the "
             "temperature-based pattern checks (setback + warm-day) ran. "
             "`setback_ratio` near/above 1.0 means little night/weekend setback; "
-            "`warm_day_share_pct` is the share of steam used when it's warmer than "
-            "18 C outside."
+            "`warm_day_share_pct` is the share of steam used when warmer than "
+            "18 C outside, shown next to `pct_hours_above_18c` for context."
         )
     else:
         weather_note = (
@@ -408,7 +479,7 @@ def process(path):
         "  - >= ~3 months: pattern checks (setback; warm-day needs weather)\n"
         "  - >= 12 months + weather: full model + 90% conformal band\n\n"
         f"Per-building outcome:\n{label_lines}\n\n"
-        f"{weather_note}"
+        f"{weather_note}{climate_note}"
     )
     write_mapping_report(path, mapping, extra=result)
     return f"OK: {os.path.basename(path)} — scored {len(summary)} buildings -> {out_path}"
