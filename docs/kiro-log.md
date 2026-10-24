@@ -728,3 +728,12 @@ Headless check (Playwright) of the Limits view at 1280 and 390: 7 `<h3>` + 8
 
 Property tests 11/11; ingester sample run OK. Report regenerated with the Render
 upload link.
+
+
+## Entry — Render is the single public site
+
+README top links collapsed to one: "Live app: https://heat-check-4w7d.onrender.com
+(report at /, upload at /upload)". Removed the GitHub Pages demo link (Pages is
+being turned off). The CI badge (GitHub Actions) stays. `docs/index.html` remains
+in the repo because the Render app serves it at `/`; only the Pages link was
+removed, not the report file.
