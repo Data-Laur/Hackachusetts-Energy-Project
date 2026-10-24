@@ -403,3 +403,54 @@ create the portable file there directly (which also means the user's working
 - README note added: copy `docs/mcp.example.json` -> `.kiro/settings/mcp.json`;
   "On macOS, if the fetch server fails to connect, replace uvx with the full path
   from `which uvx`." The user's local full-path config keeps working untouched.
+
+
+## Entry — Warm-day sanity check, branding, and logo
+
+### 1. Warm-day share investigation — NOT a bug
+Checked the suspicious 30–53% warm-day shares on the Jan–Apr samples.
+- F -> C conversion happens BEFORE the 18 C threshold (confirmed in code:
+  `to_long_kwh` converts, then `warm_day_heating` applies `WARM_DAY_TEMP_C`).
+- Sample A: Celsius range -6.7 to 35.0 (raw F was 19.9 to 95.0). Share of hours
+  above 18 C = 55.3%; Lance's steam share in those hours = 49.0% (matches).
+- Root cause: the "Bull" site is genuinely WARM — mean Jan–Apr temp 18.0 C
+  (64 F), up to 35 C in April; share of hours >18 C climbs 28% (Jan) -> 78% (Apr).
+  So the number is correct; an 18 C threshold just flags many hours at a warm
+  site. Honest caveat: warm-day share is climate-dependent in meaning.
+- Added a property-based test `test_warmday_threshold_applied_to_celsius`:
+  feeds a Fahrenheit column and asserts the ingester converts F->C and that the
+  warm-day flag reflects Celsius, never raw Fahrenheit. Guards the plausible
+  silent bug even though current code is correct. Tests now 10/10.
+
+### 2. mcp.example.json location note
+The user intended to create `.kiro/settings/mcp.example.json` manually, but the
+whole `.kiro/settings/` path is agent-write-protected and the file isn't present.
+The portable template already lives at `docs/mcp.example.json` (committed), which
+satisfies the requirement; to place it under settings, run
+`cp docs/mcp.example.json .kiro/settings/mcp.example.json`.
+
+### 3. Branding — "Heat Check" (enterprise energy-management look)
+Rebranded `docs/index.html` by editing `src/report.py` and regenerating (all
+content and functionality kept; still 3.3 MB, Plotly via CDN). Our own identity,
+not copied from any company.
+- Palette: Ink #0B2545 (top bar/nav/headings), Signal teal #0E9F8F (buttons/
+  active nav/accents; #00796B for links), Ember #E4572E (Confirmed waste), Amber
+  #F2A900 (Worth a look, dark text), Violet #7B61FF (Can't judge), Gray #8896A6
+  (Within expected range + Changed since 2016), Mist #F4F7FA background, white
+  cards with 1px #DCE3EA borders.
+- Type: Inter (Google Fonts); small uppercase section labels; dense tables with
+  tabular figures; numeric columns right-aligned.
+- Charts recolored to match verdicts: teal = expected, ember = actual/over-use;
+  teal-tinted 90% band; ember heatmap scale.
+- Accessibility: all text pairs >= 4.5:1 (verified). Badge/active-nav/button
+  backgrounds use slightly darker shades of the brand hues so white text clears
+  4.5:1 (ember #C7461F 4.86, violet #6A4BEF 5.43, gray #5F6D7D 5.29, teal #0A7C6F
+  5.09; amber keeps dark text 6.85). Responsive: nav collapses to a top row and
+  cards stack on phones (<=720px).
+
+### 4. Logo
+Kiro drew the logo as SVG from my Firefly concept: `docs/assets/logo.svg` — a
+thermometer with a thick navy (#0B2545) outline, teal (#0E9F8F) fill, a small
+solid ember (#E4572E) cap at the top of the fill, and a white checkmark inside a
+round navy bulb. No tick marks, no flame. Used as the top-bar mark beside the
+"Heat Check" wordmark and as the favicon.

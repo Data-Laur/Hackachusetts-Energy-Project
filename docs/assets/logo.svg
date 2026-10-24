@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Heat Check logo">
+  <title>Heat Check</title>
+  <!--
+    Heat Check mark (redrawn as clean SVG from the Firefly concept):
+    - thermometer with a thick navy (#0B2545) outline
+    - teal (#0E9F8F) fill in the stem and bulb
+    - small solid ember (#E4572E) cap at the TOP of the fill
+    - round navy bulb with a white checkmark inside
+    - no tick marks, no flame
+  -->
+
+  <!-- Stem outline (navy), rounded top. -->
+  <rect x="25" y="6" width="14" height="34" rx="7"
+        fill="#0B2545"/>
+  <!-- Bulb outline (navy). -->
+  <circle cx="32" cy="48" r="13" fill="#0B2545"/>
+
+  <!-- Teal fill inside the stem. -->
+  <rect x="29" y="12" width="6" height="30" rx="3" fill="#0E9F8F"/>
+  <!-- Teal fill inside the bulb. -->
+  <circle cx="32" cy="48" r="9" fill="#0E9F8F"/>
+
+  <!-- Ember cap at the top of the teal fill. -->
+  <circle cx="32" cy="12" r="3.4" fill="#E4572E"/>
+
+  <!-- White checkmark inside the bulb. -->
+  <path d="M26.5 48.5 L30.5 52.5 L38 44.5"
+        fill="none" stroke="#FFFFFF" stroke-width="3.2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

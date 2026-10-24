@@ -314,75 +314,136 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Heat Check — Campus Heating Triage</title>
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 <style>
   :root {
-    /* Okabe-Ito colorblind-safe palette. */
-    --blue: #0072B2; --orange: #E69F00; --vermillion: #D55E00;
-    --green: #009E73; --ink: #1a1a1a; --muted: #4a4a4a;
-    --bg: #ffffff; --panel: #f4f6f8; --line: #cbd2d9;
+    /* Heat Check brand palette. */
+    --ink: #0B2545;        /* top bar, nav, headings */
+    --teal: #0E9F8F;       /* buttons, active nav, accents */
+    --teal-text: #00796B;  /* teal text + links (meets 4.5:1 on white) */
+    --ember: #E4572E;      /* Confirmed waste */
+    --amber: #F2A900;      /* Worth a look (dark text) */
+    --violet: #7B61FF;     /* Can't judge */
+    --gray: #8896A6;       /* Within expected range + Changed since 2016 */
+    --mist: #F4F7FA;       /* page background */
+    --card: #ffffff;       /* white cards */
+    --border: #DCE3EA;     /* 1px card borders */
+    --body-text: #1f2a37;  /* body copy (>= 4.5:1 on mist/white) */
+    --muted: #51607a;      /* secondary text (>= 4.5:1 on white) */
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-         color: var(--ink); background: var(--bg); line-height: 1.5; }
-  a { color: var(--blue); }
-  .layout { display: flex; min-height: 100vh; }
-  nav { width: 230px; background: var(--panel); border-right: 1px solid var(--line);
-        padding: 1rem; flex-shrink: 0; }
-  nav h1 { font-size: 1.15rem; margin: 0 0 1rem; }
-  nav button { display: block; width: 100%; text-align: left; padding: .6rem .7rem;
-    margin-bottom: .3rem; border: 1px solid transparent; border-radius: 6px;
-    background: none; font-size: .95rem; cursor: pointer; color: var(--ink); }
-  nav button:hover { background: #e3e8ec; }
-  nav button[aria-current="true"] { background: var(--blue); color: #fff; font-weight: 600; }
-  main { flex: 1; padding: 1.5rem 2rem; max-width: 1100px; }
+  body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif;
+         color: var(--body-text); background: var(--mist); line-height: 1.5;
+         font-feature-settings: "tnum" 1; }  /* tabular figures */
+  a { color: var(--teal-text); }
+  h2, h3 { color: var(--ink); }
+  /* Small uppercase section labels. */
+  .eyebrow { text-transform: uppercase; letter-spacing: .06em; font-size: .72rem;
+             font-weight: 600; color: var(--muted); margin: 0 0 .35rem; }
+
+  .layout { display: flex; min-height: 100vh; flex-direction: column; }
+  /* Top bar with logo + wordmark. */
+  header.topbar { display: flex; align-items: center; gap: .6rem; background: var(--ink);
+    color: #fff; padding: .7rem 1.25rem; }
+  header.topbar img { width: 30px; height: 30px; display: block; }
+  header.topbar .wordmark { font-weight: 700; font-size: 1.15rem; letter-spacing: .01em; }
+  header.topbar .tagline { color: #AFC0D6; font-size: .8rem; margin-left: .25rem; }
+
+  .body { display: flex; flex: 1; }
+  nav { width: 220px; background: var(--ink); padding: 1rem .75rem; flex-shrink: 0; }
+  nav button { display: block; width: 100%; text-align: left; padding: .55rem .7rem;
+    margin-bottom: .25rem; border: 1px solid transparent; border-radius: 8px;
+    background: none; font: inherit; font-size: .92rem; cursor: pointer;
+    color: #D7E0EC; }
+  nav button:hover { background: rgba(255,255,255,.08); color: #fff; }
+  nav button[aria-current="true"] { background: #0A7C6F; color: #ffffff;
+    font-weight: 600; }  /* darkened teal so white label clears 4.5:1 (5.09:1) */
+  nav button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+
+  main { flex: 1; padding: 1.5rem 2rem; max-width: 1120px; }
   h2 { margin-top: 0; }
+
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
            gap: 1rem; margin-bottom: 1.5rem; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-          padding: 1rem; }
-  .card .num { font-size: 1.8rem; font-weight: 700; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+          padding: 1rem 1.1rem; }
+  .card .num { font-size: 1.8rem; font-weight: 700; color: var(--ink);
+               font-variant-numeric: tabular-nums; }
   .card .lbl { color: var(--muted); font-size: .85rem; }
   .card small { color: var(--muted); font-size: .72rem; display:block; margin-top:.3rem; }
-  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
-  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
-  th { background: #eef1f4; position: sticky; top: 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: .9rem;
+          font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--border);
+           vertical-align: top; }
+  /* Right-align numeric columns for dense, readable figures. */
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  th { background: #EAF0F6; color: var(--ink); position: sticky; top: 0;
+       text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; }
   tbody tr { cursor: pointer; }
-  tbody tr:hover { background: #eef5fb; }
-  tbody tr:focus { outline: 3px solid var(--blue); outline-offset: -3px; }
-  .badge { display: inline-block; padding: .15rem .5rem; border-radius: 999px;
-           font-size: .78rem; font-weight: 600; color: #fff; }
-  .b-confirmed { background: var(--vermillion); }
-  .b-worth { background: var(--orange); color:#1a1a1a; }
-  .b-within { background: var(--green); }
-  .b-changed { background: var(--blue); }
-  .b-cant { background: #6c757d; }
+  tbody tr:hover { background: #EEF6F5; }
+  tbody tr:focus { outline: 2px solid var(--teal); outline-offset: -2px; }
+
+  /* Badges: small text, so backgrounds use slightly darker shades of the brand
+     hues so WHITE text clears 4.5:1 (amber keeps dark text). The palette's base
+     hues are still used for larger elements (buttons, charts, accents). */
+  .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px;
+           font-size: .74rem; font-weight: 600; color: #fff; white-space: nowrap; }
+  .b-confirmed { background: #C7461F; }  /* ember, darkened: 4.86:1 */
+  .b-worth { background: var(--amber); color: #3a2b00; }   /* dark text on amber: 6.85:1 */
+  .b-within { background: #5F6D7D; }     /* gray, darkened: 5.29:1 */
+  .b-changed { background: #5F6D7D; }    /* gray, darkened: 5.29:1 */
+  .b-cant { background: #6A4BEF; }       /* violet, darkened: 5.43:1 */
+
   .filters { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items:end; }
   .filters label { font-size: .85rem; display:block; color: var(--muted); }
-  select, .btn { padding: .4rem .5rem; font-size: .9rem; border: 1px solid var(--line);
-                 border-radius: 6px; background:#fff; }
-  .btn { cursor: pointer; }
-  details { margin-top: 1.5rem; border: 1px solid var(--line); border-radius: 8px; padding: .5rem 1rem; }
-  summary { cursor: pointer; font-weight: 600; padding: .3rem 0; }
-  .chart { width: 100%; height: 380px; margin: 1rem 0; }
+  select, .btn { padding: .4rem .55rem; font: inherit; font-size: .9rem;
+                 border: 1px solid var(--border); border-radius: 8px; background:#fff;
+                 color: var(--body-text); }
+  .btn { cursor: pointer; background: #0A7C6F; color: #fff; border-color: #0A7C6F;
+         font-weight: 600; }  /* darkened teal so white label clears 4.5:1 */
+  .btn:hover { background: #097063; }
+  details { margin-top: 1.5rem; border: 1px solid var(--border); border-radius: 10px;
+            padding: .5rem 1rem; background: var(--card); }
+  summary { cursor: pointer; font-weight: 600; padding: .3rem 0; color: var(--ink); }
+  .chart { width: 100%; height: 380px; margin: 1rem 0; background: var(--card);
+           border: 1px solid var(--border); border-radius: 10px; }
   .meta-line { color: var(--muted); margin: .25rem 0 1rem; }
-  pre.notes { white-space: pre-wrap; background: var(--panel); padding: 1rem;
-              border-radius: 8px; border: 1px solid var(--line); font-family: inherit; }
+  pre.notes { white-space: pre-wrap; background: var(--card); padding: 1rem;
+              border-radius: 10px; border: 1px solid var(--border); font-family: inherit; }
   .back { margin-bottom: 1rem; }
   .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+
+  /* Phone layout: stack nav on top, single-column cards. */
+  @media (max-width: 720px) {
+    .body { flex-direction: column; }
+    nav { width: 100%; display: flex; flex-wrap: wrap; gap: .25rem; }
+    nav button { width: auto; flex: 1 1 auto; text-align: center; }
+    main { padding: 1rem; }
+  }
 </style>
 </head>
 <body>
 <div class="layout">
-  <nav aria-label="Main">
-    <h1>Heat Check</h1>
-    <button id="nav-triage" aria-current="true" onclick="show('triage')">Triage</button>
-    <button id="nav-detail" onclick="show('detail')">Building detail</button>
-    <button id="nav-method" onclick="show('method')">Method</button>
-    <button id="nav-limits" onclick="show('limits')">What we can't see</button>
-    <button id="nav-data" onclick="show('data')">Data</button>
-  </nav>
-  <main id="main"></main>
+  <header class="topbar">
+    <img src="assets/logo.svg" alt="" />
+    <span class="wordmark">Heat Check</span>
+    <span class="tagline">campus heating triage</span>
+  </header>
+  <div class="body">
+    <nav aria-label="Main">
+      <button id="nav-triage" aria-current="true" onclick="show('triage')">Triage</button>
+      <button id="nav-detail" onclick="show('detail')">Building detail</button>
+      <button id="nav-method" onclick="show('method')">Method</button>
+      <button id="nav-limits" onclick="show('limits')">What we can't see</button>
+      <button id="nav-data" onclick="show('data')">Data</button>
+    </nav>
+    <main id="main"></main>
+  </div>
 </div>
 <script>
 const DATA = __DATA__;
@@ -418,6 +479,7 @@ function renderTriage(){
     (state.verdict==="All"||r.verdict===state.verdict));
 
   const html = `
+  <p class="eyebrow">Campus overview</p>
   <h2>Triage</h2>
   <p class="meta-line">Which buildings waste heat, ranked by evidence strength. Click any row for detail.</p>
   <div class="cards">
@@ -441,14 +503,14 @@ function renderTriage(){
     <thead><tr>
       <th scope="col">Building</th><th scope="col">Type</th><th scope="col">Verdict</th>
       <th scope="col">Flagged by</th><th scope="col">Pattern</th><th scope="col">Likely fix</th>
-      <th scope="col">Excess kWh</th><th scope="col">$/yr</th><th scope="col">kg CO2/yr</th>
+      <th scope="col" class="num">Excess kWh</th><th scope="col" class="num">$/yr</th><th scope="col" class="num">kg CO2/yr</th>
     </tr></thead>
     <tbody>
     ${rows.map(r=>`
       <tr tabindex="0" role="button" onclick="openBuilding('${r.id}')" onkeydown="if(event.key==='Enter')openBuilding('${r.id}')">
         <td>${r.id}</td><td>${r.type}</td><td>${badge(r.verdict)}</td>
         <td>${r.flagged_by}</td><td>${r.pattern}</td><td>${r.fix}</td>
-        <td>${fmt(r.excess_kwh)}</td><td>${fmt(r.excess_dollars)}</td><td>${fmt(r.excess_co2_kg)}</td>
+        <td class="num">${fmt(r.excess_kwh)}</td><td class="num">${fmt(r.excess_dollars)}</td><td class="num">${fmt(r.excess_co2_kg)}</td>
       </tr>`).join('')}
     </tbody>
   </table>
@@ -494,29 +556,36 @@ function renderDetail(){
   drawMonth(b);
 }
 
-const LAYOUT = (title,xt,yt)=>({title:title,xaxis:{title:xt},yaxis:{title:yt},
-  margin:{t:40,r:20,b:50,l:60}, font:{family:'system-ui'}, legend:{orientation:'h'}});
+const LAYOUT = (title,xt,yt)=>({title:{text:title, font:{color:'#0B2545', size:15}},
+  xaxis:{title:xt}, yaxis:{title:yt}, margin:{t:44,r:20,b:50,l:60},
+  font:{family:'Inter, system-ui, sans-serif', color:'#1f2a37'},
+  paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff', legend:{orientation:'h'}});
 
+// Brand chart colors, consistent with the verdict palette:
+// teal = expected (baseline), ember = actual (over-use / waste).
+const C_EXPECTED = '#0E9F8F';   // teal
+const C_ACTUAL   = '#E4572E';   // ember
+const C_BANDFILL = 'rgba(14,159,143,0.15)';  // teal-tinted 90% band
 function drawWeek(id, idx){
   const b = DATA.buildings.find(x=>x.id===id); const w = b.weeks[idx];
   const band = {x:w.t.concat([...w.t].reverse()), y:w.upper.concat([...w.lower].reverse()),
-    fill:'toself', fillcolor:'rgba(0,114,178,0.15)', line:{color:'rgba(0,0,0,0)'},
+    fill:'toself', fillcolor:C_BANDFILL, line:{color:'rgba(0,0,0,0)'},
     name:'90% band', hoverinfo:'skip'};
-  const exp = {x:w.t, y:w.expected, name:'Expected', mode:'lines', line:{color:'#0072B2', width:2}};
-  const act = {x:w.t, y:w.actual, name:'Actual', mode:'lines', line:{color:'#D55E00', width:2}};
+  const exp = {x:w.t, y:w.expected, name:'Expected', mode:'lines', line:{color:C_EXPECTED, width:2}};
+  const act = {x:w.t, y:w.actual, name:'Actual', mode:'lines', line:{color:C_ACTUAL, width:2}};
   Plotly.newPlot('chart-week', [band,exp,act], LAYOUT('Actual vs expected steam (kWh) — '+w.label,'Time','Steam (kWh)'), {displayModeBar:false, responsive:true});
 }
 function drawHeat(b){
   const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const hours=[...Array(24).keys()].map(h=>h+':00');
   Plotly.newPlot('chart-heat', [{z:b.heatmap, x:hours, y:days, type:'heatmap',
-    colorscale:[[0,'#f4f6f8'],[1,'#D55E00']], colorbar:{title:'kWh'}}],
+    colorscale:[[0,'#F4F7FA'],[1,C_ACTUAL]], colorbar:{title:'kWh'}}],
     LAYOUT('Total excess by hour x day','Hour of day','Day of week'), {displayModeBar:false, responsive:true});
 }
 function drawMonth(b){
   const m=b.monthly;
-  const act={x:m.months, y:m.actual, type:'bar', name:'Actual', marker:{color:'#D55E00'}};
-  const exp={x:m.months, y:m.expected, type:'bar', name:'Expected', marker:{color:'#0072B2'}};
+  const act={x:m.months, y:m.actual, type:'bar', name:'Actual', marker:{color:C_ACTUAL}};
+  const exp={x:m.months, y:m.expected, type:'bar', name:'Expected', marker:{color:C_EXPECTED}};
   Plotly.newPlot('chart-month', [act,exp], {...LAYOUT('Monthly actual vs expected (kWh)','Month','Steam (kWh)'), barmode:'group'}, {displayModeBar:false, responsive:true});
 }
 

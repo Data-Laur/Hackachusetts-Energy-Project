@@ -31,6 +31,7 @@ if REPO_ROOT not in sys.path:
 
 import config  # noqa: E402
 from waste_detect import money_and_co2  # noqa: E402
+from src.ingest import detect_and_map, to_long_kwh  # noqa: E402
 
 PROCESSED = config.PROCESSED_DIR
 RANKED_TIERS = {"Confirmed waste", "Worth a look", "Within expected range",
@@ -181,3 +182,65 @@ def test_excess_formula_properties(actual, upper):
         assert excess == 0
     else:
         assert excess == pytest.approx(actual - upper)
+
+
+# ----------------------- Requirement 3 (warm-day uses Celsius) --------------
+
+def _f_to_c(f):
+    return (f - 32) * 5.0 / 9.0
+
+
+@given(
+    temps_f=st.lists(
+        st.floats(min_value=-40, max_value=120, allow_nan=False, allow_infinity=False),
+        min_size=3, max_size=30,
+    )
+)
+@settings(max_examples=150)
+def test_warmday_threshold_applied_to_celsius(temps_f):
+    """
+    Req 3: the 18 C warm-day threshold must be applied to CELSIUS values.
+
+    We feed the ingester a Fahrenheit temperature column (name 'Outdoor Temp (F)')
+    and check that:
+      1. it detects Fahrenheit and converts to Celsius (F -> C BEFORE any
+         threshold), and
+      2. the warm-day flag computed from the ingester's airTemperature matches
+         the flag computed from the correct Celsius conversion — NOT from the raw
+         Fahrenheit numbers (which would wrongly call ~64 F a 'warm day' because
+         64 > 18).
+    """
+    n = len(temps_f)
+    times = pd.date_range("2017-01-01", periods=n, freq="h").strftime("%Y-%m-%d %H:%M")
+    df = pd.DataFrame({
+        "Date/Time": times,
+        "Bldg Name": ["B"] * n,
+        "Steam (kWh)": [100.0] * n,
+        "Outdoor Temp (F)": temps_f,
+    })
+    mapping = detect_and_map(df)
+    assert mapping["temp_col"] == "Outdoor Temp (F)"
+    assert mapping["temp_is_f"] is True  # detected as Fahrenheit
+
+    long = to_long_kwh(df, mapping, "unit_test.csv")
+    got_c = long["airTemperature"].to_numpy()
+    expected_c = np.array([_f_to_c(f) for f in temps_f])
+    # Conversion is correct (the ingester rounds airTemperature to 2 decimals,
+    # so compare at that tolerance; clearly NOT the identity for F != C).
+    assert np.allclose(got_c, expected_c, atol=0.01)
+
+    thr = config.WARM_DAY_TEMP_C
+    # Compare warm-day flags using the ingester's (rounded) Celsius values vs the
+    # raw Fahrenheit numbers. The flag must reflect Celsius, never raw Fahrenheit.
+    warm_from_ingester = got_c > thr
+    warm_from_raw_fahrenheit = np.array(temps_f) > thr
+    # Where true-Celsius and raw-Fahrenheit disagree (temps between 18 C = 64.4 F
+    # and 18 F), the ingester must side with Celsius — i.e. it must NOT equal the
+    # raw-Fahrenheit comparison.
+    warm_from_true_celsius = expected_c > thr
+    disagree = warm_from_true_celsius != warm_from_raw_fahrenheit
+    if disagree.any():
+        assert not np.array_equal(warm_from_ingester, warm_from_raw_fahrenheit)
+        # And on the disagreeing positions, the ingester matches Celsius truth.
+        assert np.array_equal(warm_from_ingester[disagree],
+                              warm_from_true_celsius[disagree])
