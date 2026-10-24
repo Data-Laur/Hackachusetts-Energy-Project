@@ -32,3 +32,7 @@ inbox/mapping_report.md
 
 # Local hook state (per-machine task-completion tracking)
 .kiro/specs/heat-check/.task_count
+
+# Local MCP settings (may contain machine-specific absolute paths). The portable
+# template lives at docs/mcp.example.json.
+.kiro/settings/mcp.json

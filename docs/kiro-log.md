@@ -366,3 +366,40 @@ AMBIGUOUS), and runs the property-based tests (data-driven ones skip without
 Datasets/, pure-function ones always run). Added a CI status badge to
 `README.md`.
 Kiro features used: agent hooks, MCP (fetch server), and the test/CI loop.
+
+
+## Entry — Real-results samples (with weather) + portable MCP config
+
+### 1. Samples rebuilt so uploads show real results
+`samples/_make_samples.py` now uses 4 months of REAL Bull data (Jan–Apr 2017),
+3–4 buildings, and adds an outdoor-temperature column in Fahrenheit
+("Outdoor Temp (F)") joined from Bull weather. Each file stays < 1 MB (A 427 KB,
+B 126 KB, C 405 KB). Sample C is still ambiguous ("Usage", no steam unit).
+
+Ingester upgrades (`src/ingest.py`):
+- Detects an outdoor-temperature column (separately from steam), recognizes
+  Fahrenheit from the name, and converts F -> C.
+- Carries temperature through long AND wide mapping.
+- With temperature + >= ~3 months of data, runs the REAL pattern checks
+  (setback ratio + warm-day share) using the same functions as `waste_detect.py`.
+- Added repo-root to sys.path so `python src/ingest.py` can import waste_detect.
+
+Results on the new samples (pattern checks now run):
+- A: Bull_assembly_Lance setback 0.95 / warm-day 49.0%; Clarice 0.90 / 40.5%;
+  Dan 0.98 / 43.5% — all "Pattern checks only" (3.9 months < 12).
+- B: Gregory 0.76 / 30.8%; Jeremiah 0.95 / 53.1%; Lettie 0.92 / 48.6%;
+  Trevor 0.80 / 46.3%.
+- C: still STOPS — detects the temp column but refuses because "Usage" has no
+  steam unit.
+Property tests still pass (9/9).
+
+### 2. Portable MCP config + README note
+The whole `.kiro/settings/` path is write-protected for the agent, so I could not
+create the portable file there directly (which also means the user's working
+`mcp.json` was never touched). Instead:
+- Committed a portable template at `docs/mcp.example.json` using plain `"uvx"`.
+- Gitignored `.kiro/settings/mcp.json` (confirmed it was never tracked, so the
+  user's absolute uvx path never leaked).
+- README note added: copy `docs/mcp.example.json` -> `.kiro/settings/mcp.json`;
+  "On macOS, if the fetch server fails to connect, replace uvx with the full path
+  from `which uvx`." The user's local full-path config keeps working untouched.

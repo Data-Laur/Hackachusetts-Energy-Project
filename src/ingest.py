@@ -26,18 +26,39 @@ import sys
 
 import pandas as pd
 
+# Allow importing repo-root modules (waste_detect, config) when run as
+# `python src/ingest.py` from the repo root.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
 # Unit conversions into kWh.
 MMBTU_TO_KWH = 293.07122       # 1 MMBtu = 293.07 kWh
 KBTU_TO_KWH = 0.29307122       # 1 kBTU  = 0.293 kWh
 # Candidate column names we recognize (lowercased, loose match).
 TIME_HINTS = ["date/time", "reading time", "timestamp", "time", "datetime"]
 BUILDING_HINTS = ["bldg name", "building", "building_id", "name", "bldg"]
+# Outdoor-temperature column hints.
+TEMP_HINTS = ["outdoor temp", "air temp", "airtemperature", "temperature", "temp"]
 # Value column name -> unit. Only used when the unit is explicit.
 UNIT_PATTERNS = {
     "kwh": 1.0,
     "mmbtu": MMBTU_TO_KWH,
     "kbtu": KBTU_TO_KWH,
 }
+
+
+def _find_temp(colnames):
+    """Find an outdoor-temperature column and whether it's in Fahrenheit."""
+    low = {c.lower(): c for c in colnames}
+    for hint in TEMP_HINTS:
+        for lc, orig in low.items():
+            if hint in lc:
+                # Fahrenheit if the name mentions F and not C.
+                is_f = ("(f)" in lc or " f)" in lc or "fahrenheit" in lc
+                        or lc.rstrip().endswith(" f"))
+                return orig, is_f
+    return None, False
 
 
 def _find(colnames, hints):
@@ -65,15 +86,27 @@ def detect_and_map(df):
 
     time_col = _find(cols, TIME_HINTS)
     building_col = _find(cols, BUILDING_HINTS)
+    # Pull out an outdoor-temperature column up front, so it isn't mistaken for a
+    # steam value / building column.
+    temp_col, temp_is_f = _find_temp(cols)
+    if temp_col:
+        reasons.append(
+            f"Found outdoor temperature column '{temp_col}' "
+            f"({'Fahrenheit -> converting to Celsius' if temp_is_f else 'Celsius'})."
+        )
 
-    # LONG format: has a time column, a building-name column, and one value column.
+    # LONG format: time column, a building-name column, and one value column
+    # (temperature, if present, is excluded from the value-column count).
     if time_col and building_col:
-        value_candidates = [c for c in cols if c not in (time_col, building_col)]
+        value_candidates = [c for c in cols
+                            if c not in (time_col, building_col, temp_col)]
         if len(value_candidates) != 1:
             return {"format": "long", "ambiguous": True,
-                    "reasons": [f"Expected exactly one value column, found "
-                                f"{len(value_candidates)}: {value_candidates}."],
-                    "time_col": time_col, "building_col": building_col}
+                    "reasons": reasons + [f"Expected exactly one value column, "
+                                          f"found {len(value_candidates)}: "
+                                          f"{value_candidates}."],
+                    "time_col": time_col, "building_col": building_col,
+                    "temp_col": temp_col, "temp_is_f": temp_is_f}
         value_col = value_candidates[0]
         unit, factor = _unit_from_name(value_col)
         if unit is None:
@@ -85,20 +118,20 @@ def detect_and_map(df):
             )
             return {"format": "long", "ambiguous": True, "reasons": reasons,
                     "time_col": time_col, "building_col": building_col,
-                    "value_col": value_col}
+                    "value_col": value_col, "temp_col": temp_col,
+                    "temp_is_f": temp_is_f}
         reasons.append(f"Detected long format: time='{time_col}', "
                        f"building='{building_col}', value='{value_col}'.")
         reasons.append(f"Unit '{unit}' -> multiply by {factor} to get kWh.")
         return {"format": "long", "ambiguous": False, "reasons": reasons,
                 "time_col": time_col, "building_col": building_col,
-                "value_col": value_col, "unit": unit, "factor": factor}
+                "value_col": value_col, "unit": unit, "factor": factor,
+                "temp_col": temp_col, "temp_is_f": temp_is_f}
 
-    # WIDE format: a time column plus one numeric column per building.
+    # WIDE format: a time column plus one numeric column per building (and maybe
+    # a temperature column, which we exclude from the building columns).
     if time_col and not building_col:
-        value_cols = [c for c in cols if c != time_col]
-        # Unit must come from somewhere; for wide files we look at the filename
-        # hint (handled by the caller) — here we assume the header carries it or
-        # the caller passed a unit. We check if ANY building col names a unit.
+        value_cols = [c for c in cols if c not in (time_col, temp_col)]
         unit, factor = _unit_from_name(" ".join(value_cols))
         if unit is None:
             reasons.append(
@@ -108,7 +141,8 @@ def detect_and_map(df):
             )
         return {"format": "wide", "ambiguous": unit is None, "reasons": reasons,
                 "time_col": time_col, "value_cols": value_cols,
-                "unit": unit, "factor": factor}
+                "unit": unit, "factor": factor,
+                "temp_col": temp_col, "temp_is_f": temp_is_f}
 
     return {"format": "unknown", "ambiguous": True,
             "reasons": ["Could not find a timestamp column; cannot map."]}
@@ -128,28 +162,51 @@ def unit_from_filename(path):
     return _unit_from_name(os.path.basename(path))
 
 
+def _temp_c_series(df, mapping):
+    """Return a Celsius temperature series aligned to df rows, or None."""
+    temp_col = mapping.get("temp_col")
+    if not temp_col:
+        return None
+    temp = df[temp_col].astype(float)
+    if mapping.get("temp_is_f"):
+        temp = (temp - 32) * 5 / 9  # F -> C
+    return temp.round(2)
+
+
 def to_long_kwh(df, mapping, path):
-    """Apply the mapping and return a tidy frame: timestamp, building_id, steam_kwh."""
+    """
+    Apply the mapping and return a tidy frame:
+        timestamp, building_id, steam_kwh [, airTemperature]
+    Temperature (if present) is converted to Celsius and carried along.
+    """
+    temp_c = _temp_c_series(df, mapping)
     if mapping["format"] == "long":
         out = pd.DataFrame({
             "timestamp": pd.to_datetime(df[mapping["time_col"]]),
             "building_id": df[mapping["building_col"]].astype(str),
             "steam_kwh": df[mapping["value_col"]].astype(float) * mapping["factor"],
         })
+        if temp_c is not None:
+            out["airTemperature"] = temp_c.values
         return out
     # wide
     factor = mapping.get("factor")
-    unit = mapping.get("unit")
     if factor is None:
-        # Try the filename as a last resort.
-        unit, factor = unit_from_filename(path)
-    long = df.melt(id_vars=mapping["time_col"], var_name="building_id",
-                   value_name="value")
+        _, factor = unit_from_filename(path)
+    # Temperature is per-timestamp, so attach it before melting the buildings.
+    id_vars = [mapping["time_col"]]
+    work = df[[mapping["time_col"]] + mapping["value_cols"]].copy()
+    if temp_c is not None:
+        work["__tempC__"] = temp_c.values
+        id_vars.append("__tempC__")
+    long = work.melt(id_vars=id_vars, var_name="building_id", value_name="value")
     out = pd.DataFrame({
         "timestamp": pd.to_datetime(long[mapping["time_col"]]),
         "building_id": long["building_id"].astype(str),
         "steam_kwh": long["value"].astype(float) * (factor or 1.0),
     })
+    if temp_c is not None:
+        out["airTemperature"] = long["__tempC__"].values
     return out
 
 
@@ -254,10 +311,25 @@ def score(long_df, path, has_weather=False):
     supply a matching weather file (future extension); here has_weather=False.
     """
     os.makedirs(os.path.join("inbox", "results"), exist_ok=True)
+    # Pattern checks use the same logic as the main pipeline.
+    from waste_detect import setback_ratio, warm_day_heating
+
+    has_temp = has_weather and "airTemperature" in long_df.columns
     rows = []
-    for bid, s in long_df.groupby("building_id")["steam_kwh"]:
+    for bid, g in long_df.groupby("building_id"):
+        s = g["steam_kwh"]
         hours = int(s.size)
-        label, methods = _methods_for(hours, has_weather)
+        label, methods = _methods_for(hours, has_temp)
+
+        setback = warm_share = warm_kwh = None
+        # Run the real pattern checks when we have temperature + enough data.
+        if has_temp and hours >= PATTERN_MIN_HOURS:
+            grp = g.rename(columns={"steam_kwh": "steam"})[
+                ["timestamp", "steam", "airTemperature"]
+            ]
+            setback = setback_ratio(grp)
+            warm_kwh, warm_share = warm_day_heating(grp)
+
         rows.append({
             "building_id": bid,
             "hours": hours,
@@ -265,6 +337,10 @@ def score(long_df, path, has_weather=False):
             "total_steam_kwh": round(float(s.sum()), 1),
             "pct_missing": round(float(s.isna().mean()) * 100, 1),
             "pct_zero": round(float((s == 0).mean()) * 100, 1),
+            "setback_ratio": (None if setback is None else round(float(setback), 2)),
+            "warm_day_kwh": (None if warm_kwh is None else round(float(warm_kwh), 1)),
+            "warm_day_share_pct": (None if warm_share is None
+                                   else round(float(warm_share) * 100, 1)),
             "scored_as": label,
             "methods_run": "; ".join(methods) if methods else "none",
         })
@@ -297,24 +373,42 @@ def process(path):
         return f"AMBIGUOUS: {os.path.basename(path)} — wrote inbox/mapping_report.md, stopped."
 
     long_df = to_long_kwh(df, mapping, path)
-    out_path, summary = score(long_df, path, has_weather=False)
+    # If the file carried a temperature column, weather is available for the
+    # temperature-dependent checks.
+    has_weather = bool(mapping.get("temp_col"))
+    out_path, summary = score(long_df, path, has_weather=has_weather)
     labels = summary["scored_as"].value_counts().to_dict()
     label_lines = "\n".join(f"  - {k}: {v} building(s)" for k, v in labels.items())
+    if has_weather:
+        weather_note = (
+            "### Weather\n"
+            f"This file INCLUDED an outdoor-temperature column "
+            f"('{mapping['temp_col']}'"
+            f"{', converted F -> C' if mapping.get('temp_is_f') else ''}), so the "
+            "temperature-based pattern checks (setback + warm-day) ran. "
+            "`setback_ratio` near/above 1.0 means little night/weekend setback; "
+            "`warm_day_share_pct` is the share of steam used when it's warmer than "
+            "18 C outside."
+        )
+    else:
+        weather_note = (
+            "### Weather\n"
+            "No temperature column was found, and this uploader does NOT fetch "
+            "weather automatically (an arbitrary building_id isn't tied to a known "
+            "BDG2 site), so only weather-free checks ran. Add an outdoor-temp "
+            "column (e.g. 'Outdoor Temp (F)') to enable the pattern checks."
+        )
     result = (
         f"## Result\nScored {len(summary)} buildings -> `{out_path}`.\n\n"
         "### What \"scored\" means here\n"
         "A dropped-in file has no separate 2016 training year, so the full "
         "weather-normalized model usually cannot run. Methods run per building "
         "depend on data length:\n"
-        f"  - >= 1 week: data-quality check\n"
-        f"  - >= ~3 months: pattern checks (setback; warm-day needs weather)\n"
-        f"  - >= 12 months + weather: full model + 90% conformal band\n\n"
+        "  - >= 1 week: data-quality check\n"
+        "  - >= ~3 months: pattern checks (setback; warm-day needs weather)\n"
+        "  - >= 12 months + weather: full model + 90% conformal band\n\n"
         f"Per-building outcome:\n{label_lines}\n\n"
-        "### Weather\n"
-        "The pattern/warm-day and model methods need outdoor temperature. This "
-        "uploader does NOT fetch weather automatically — an arbitrary building_id "
-        "isn't tied to a known BDG2 site — so only weather-free checks ran. "
-        "Supply a matching weather file to enable the temperature-based checks."
+        f"{weather_note}"
     )
     write_mapping_report(path, mapping, extra=result)
     return f"OK: {os.path.basename(path)} — scored {len(summary)} buildings -> {out_path}"
