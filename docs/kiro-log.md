@@ -571,3 +571,32 @@ no sideways scrolling at any width.
     pip install -r requirements.txt
     uvicorn app:app --reload --port 8000
     # open http://127.0.0.1:8000/  (report)  and  /upload  (upload flow)
+
+
+## Entry — Priorities view: rename, sorting, priority column, CSV export, polish
+
+Edited `src/report.py` and regenerated `docs/index.html`.
+
+1. **Renamed "Triage" -> "Priorities"** everywhere (nav, title, heading, view key
+   `priorities`, function `renderPriorities`, back button, README). New subhead:
+   "Sorted by evidence strength, then dollars wasted. Click a column header to
+   re-sort."
+2. **Sortable columns:** clicking a header sorts by it; clicking again reverses,
+   with a ▲/▼ arrow and `aria-sort`. Added a **Priority** column (1,2,3… from the
+   default order) so users can sort back to the original ranking. Sort is stable
+   (ties fall back to default priority).
+3. **Export CSV:** outlined "Export CSV" button next to Customize columns.
+   Downloads the CURRENT view (filters + sort + visible columns) as
+   `heat-check-priorities.csv`, first line a comment with date, site Hog, and
+   "Excess is conservative: energy above the 90% upper bound". Pure client-side
+   Blob download; proper CSV quoting.
+4. **UI polish:** minimum 16px fonts everywhere (nav, badges, tags, table
+   headers, card labels/notes, stacked rows, menu) via `html{font-size:16px}` and
+   rem sizes >= 1rem; spacing rebalanced. Filter labels ("Building type",
+   "Verdict") semi-bold (600). Building column now shows the short name in
+   semi-bold with the type smaller underneath; cells wrap between words only
+   (`overflow-wrap:break-word; word-break:normal; hyphens:none`). Dropdowns and
+   buttons share one height (40px) and align on a common baseline.
+
+Verified: report JSON parses (38 rows), no "Triage" left, property tests 11/11,
+ingester sample run OK.

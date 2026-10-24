@@ -25,7 +25,8 @@ calibrated uncertainty, and refuses to answer when the evidence is weak.
 - Learns each building's **expected** hourly steam use from weather and schedule.
 - Flags hours that run **above** a calibrated 90% band as excess, and converts it
   to dollars and CO2.
-- Sorts buildings into clear verdict tiers and suggests a likely fix.
+- Sorts buildings into clear verdict tiers in a **Priorities** view (sortable,
+  with CSV export) and suggests a likely fix.
 - **Refuses to guess** when a building's model isn't trustworthy or its data is
   poor ("Can't judge").
 - Ships one self-contained, interactive HTML report — no server to run.

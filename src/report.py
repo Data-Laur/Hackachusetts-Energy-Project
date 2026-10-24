@@ -7,8 +7,9 @@ JavaScript, with Plotly loaded from a CDN (keeps the file small). GitHub Pages
 can serve docs/index.html directly.
 
 What the page contains:
-  - View 1 "Triage": headline cards, a ranked table (Confirmed waste then Worth a
-    look), filters, and a collapsible list of the buildings we don't rank.
+  - View 1 "Priorities": headline cards, a sortable ranked table (Confirmed waste
+    then Worth a look), filters, CSV export, and a collapsible list of the
+    buildings we don't rank.
   - View 2 "Building detail": verdict + model trust, an actual-vs-expected chart
     with the 90% band (worst week by default, with a week picker), an excess
     heatmap (hour-of-day x day-of-week), and monthly actual-vs-expected bars.
@@ -320,7 +321,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Heat Check — Campus Heating Triage</title>
+<title>Heat Check — Campus Heating Priorities</title>
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -343,14 +344,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     --muted: #51607a;      /* secondary text (>= 4.5:1 on white) */
   }
   * { box-sizing: border-box; }
+  /* Minimum 16px everywhere: set the root to 16px and use rem-based sizes that
+     never drop below 1rem for text. */
+  html { font-size: 16px; }
   body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif;
          color: var(--body-text); background: var(--mist); line-height: 1.5;
-         font-feature-settings: "tnum" 1; }  /* tabular figures */
+         font-size: 1rem; font-feature-settings: "tnum" 1; }  /* tabular figures */
   a { color: var(--teal-text); }
   h2, h3 { color: var(--ink); }
-  /* Small uppercase section labels. */
-  .eyebrow { text-transform: uppercase; letter-spacing: .06em; font-size: .72rem;
-             font-weight: 600; color: var(--muted); margin: 0 0 .35rem; }
+  /* Uppercase section labels — kept to 16px for the min-size rule. */
+  .eyebrow { text-transform: uppercase; letter-spacing: .06em; font-size: 1rem;
+             font-weight: 600; color: var(--muted); margin: 0 0 .5rem; }
 
   .layout { display: flex; min-height: 100vh; flex-direction: column; }
   /* Top bar with logo + wordmark. */
@@ -358,14 +362,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     color: #fff; padding: .7rem 1.25rem; }
   header.topbar img { width: 34px; height: 34px; display: block; }
   header.topbar .wordmark { font-weight: 700; font-size: 1.15rem; letter-spacing: .01em; }
-  header.topbar .tagline { color: #AFC0D6; font-size: .8rem; margin-left: .5rem;
+  header.topbar .tagline { color: #AFC0D6; font-size: 1rem; margin-left: .5rem;
     padding-left: .5rem; border-left: 1px solid #33496a; }
+  /* Hide the tagline earlier if it would crowd the wordmark. */
+  @media (max-width: 860px) { header.topbar .tagline { display: none; } }
 
   .body { display: flex; flex: 1; min-width: 0; }
   nav { width: 200px; background: var(--ink); padding: 1rem .75rem; flex-shrink: 0; }
   nav button { display: block; width: 100%; text-align: left; padding: .55rem .7rem;
     margin-bottom: .25rem; border: none; border-radius: 8px;
-    background: none; font: inherit; font-size: .92rem; cursor: pointer;
+    background: none; font: inherit; font-size: 1rem; cursor: pointer;
     color: #D7E0EC; }
   nav button:hover { background: rgba(255,255,255,.08); color: #fff; }
   /* Active nav: solid darker teal only, no outline. */
@@ -387,21 +393,29 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .card .num { font-size: clamp(1.1rem, 4.5vw, 1.9rem); font-weight: 700;
                color: var(--ink); font-variant-numeric: tabular-nums;
                line-height: 1.1; overflow-wrap: anywhere; }
-  .card .lbl { color: var(--muted); font-size: .85rem; margin-top: .25rem; }
-  .card small { color: var(--muted); font-size: .72rem; display:block; margin-top:.3rem; }
+  .card .lbl { color: var(--muted); font-size: 1rem; margin-top: .35rem; }
+  .card small { color: var(--muted); font-size: 1rem; display:block; margin-top:.4rem;
+                line-height: 1.35; }
 
   .table-wrap { width: 100%; max-width: 100%; }
   table { border-collapse: collapse; width: 100%; table-layout: fixed;
-          font-size: .9rem; font-variant-numeric: tabular-nums; }
-  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--border);
-           vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
+          font-size: 1rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--border);
+           vertical-align: top; overflow-wrap: break-word; word-break: normal;
+           hyphens: none; }  /* wrap between words, never mid-word */
   /* Right-align numeric columns for dense, readable figures. */
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   th { background: #EAF0F6; color: var(--ink);
-       text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; }
+       text-transform: uppercase; letter-spacing: .04em; font-size: 1rem;
+       font-weight: 600; }
+  .th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+  .th-sort:hover { background: #E1EAF2; }
   tbody tr { cursor: pointer; }
   tbody tr:hover { background: #EEF6F5; }
   tbody tr:focus { outline: 2px solid var(--teal); outline-offset: -2px; }
+  /* Building column: bold short name, smaller type underneath; no mid-word break. */
+  .bname { display: block; font-weight: 600; color: var(--ink); overflow-wrap: break-word; }
+  .btype { display: block; color: var(--muted); font-size: 1rem; }
 
   /* Column picker popover. */
   .colpicker { position: relative; display: inline-block; }
@@ -415,9 +429,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   /* Short "why flagged" tags. */
   .tags { display: flex; flex-wrap: wrap; gap: .25rem; }
-  .tag { display: inline-block; background: #EEF2F7; color: #324; color: var(--ink);
-    border: 1px solid var(--border); border-radius: 6px; padding: .05rem .4rem;
-    font-size: .72rem; white-space: nowrap; }
+  .tag { display: inline-block; background: #EEF2F7; color: var(--ink);
+    border: 1px solid var(--border); border-radius: 6px; padding: .1rem .45rem;
+    font-size: 1rem; white-space: nowrap; }
 
   /* Stacked card view (used below 900px). Hidden by default. */
   .stack { display: none; }
@@ -425,7 +439,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; }
   .stack .srow:focus { outline: 2px solid var(--teal); }
   .stack .srow .sline { display: flex; justify-content: space-between; gap: .75rem;
-    padding: .15rem 0; font-size: .88rem; }
+    padding: .2rem 0; font-size: 1rem; }
   .stack .srow .sline .k { color: var(--muted); }
   .stack .srow .sname { font-weight: 600; color: var(--ink); margin-bottom: .3rem;
     overflow-wrap: anywhere; }
@@ -433,8 +447,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   /* Badges: small text, so backgrounds use slightly darker shades of the brand
      hues so WHITE text clears 4.5:1 (amber keeps dark text). The palette's base
      hues are still used for larger elements (buttons, charts, accents). */
-  .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px;
-           font-size: .74rem; font-weight: 600; color: #fff; white-space: nowrap; }
+  .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px;
+           font-size: 1rem; font-weight: 600; color: #fff; white-space: nowrap; }
   .b-confirmed { background: #C7461F; }  /* ember, darkened: 4.86:1 */
   .b-worth { background: var(--amber); color: #3a2b00; }   /* dark text on amber: 6.85:1 */
   .b-within { background: #5F6D7D; }     /* gray, darkened: 5.29:1 */
@@ -442,28 +456,32 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .b-cant { background: #6A4BEF; }       /* violet, darkened: 5.43:1 */
 
   .filters { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items:end; }
-  .filters label { font-size: .85rem; display:block; color: var(--muted); }
-  select, .btn { padding: .4rem .55rem; font: inherit; font-size: .9rem;
-                 border: 1px solid var(--border); border-radius: 8px; background:#fff;
+  .filters > div { display: flex; flex-direction: column; justify-content: flex-end; }
+  .flabel { font-size: 1rem; font-weight: 600; display:block; color: var(--ink);
+            margin-bottom: .3rem; }
+  /* Controls share one height (40px) and vertical alignment. */
+  select, .btn, .btn-outline { height: 40px; font: inherit; font-size: 1rem;
+                 border-radius: 8px; }
+  select, .btn { padding: 0 .7rem; border: 1px solid var(--border); background:#fff;
                  color: var(--body-text); }
   /* Native select with a custom teal chevron (~14px) and room on the right. */
   select { -webkit-appearance: none; -moz-appearance: none; appearance: none;
-    padding-right: 32px;  /* 14px chevron + 12px gap + 6px */
+    padding-right: 34px;  /* 14px chevron + 12px gap + room */
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230E9F8F' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
     background-repeat: no-repeat; background-position: right 12px center; }
   .btn { cursor: pointer; background: #0A7C6F; color: #fff; border-color: #0A7C6F;
-         font-weight: 600; }  /* darkened teal so white label clears 4.5:1 */
+         font-weight: 600; display: inline-flex; align-items: center; }
   .btn:hover { background: #097063; }
-  /* Outlined variant: teal border + text on white, with a small sliders icon. */
+  /* Outlined variant: teal border + text on white, with a small icon. */
   .btn-outline { cursor: pointer; background: #fff; color: var(--teal-text);
-    border: 1px solid var(--teal); font: inherit; font-size: .9rem; font-weight: 600;
-    border-radius: 8px; padding: .4rem .7rem; display: inline-flex; align-items: center;
-    gap: .4rem; }
+    border: 1px solid var(--teal); font-weight: 600;
+    padding: 0 .8rem; display: inline-flex; align-items: center; gap: .45rem; }
   .btn-outline:hover { background: #F0FBF9; }
   .btn-outline svg { flex-shrink: 0; }
   /* Column checkbox list: checked boxes use the brand teal. */
-  .colpicker .menu input[type="checkbox"] { accent-color: var(--teal); width: 15px;
-    height: 15px; }
+  .colpicker .menu label { font-size: 1rem; }
+  .colpicker .menu input[type="checkbox"] { accent-color: var(--teal); width: 17px;
+    height: 17px; }
   details { margin-top: 1.5rem; border: 1px solid var(--border); border-radius: 10px;
             padding: .5rem 1rem; background: var(--card); }
   summary { cursor: pointer; font-weight: 600; padding: .3rem 0; color: var(--ink); }
@@ -501,7 +519,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </header>
   <div class="body">
     <nav aria-label="Main">
-      <button id="nav-triage" aria-current="true" onclick="show('triage')">Triage</button>
+      <button id="nav-priorities" aria-current="true" onclick="show('priorities')">Priorities</button>
       <button id="nav-detail" onclick="show('detail')">Building detail</button>
       <button id="nav-method" onclick="show('method')">Method</button>
       <button id="nav-limits" onclick="show('limits')">What we can't see</button>
@@ -540,7 +558,11 @@ function whyTags(r){
 }
 
 // Column definitions. "Default" ones show on load; the rest are opt-in.
+// `always` columns can't be hidden. VERDICT_ORDER drives the default priority.
+const VERDICT_ORDER = { "Confirmed waste":0, "Worth a look":1,
+  "Within expected range":2, "Changed since 2016":3, "Can't judge":4 };
 const COLUMNS = [
+  { key:'priority', label:'Priority', def:true, always:true, num:true },
   { key:'building', label:'Building', def:true,  always:true },
   { key:'verdict',  label:'Verdict',  def:true,  always:true },
   { key:'why',      label:'Why flagged', def:true },
@@ -553,6 +575,42 @@ const COLUMNS = [
   { key:'method',   label:'Flagged by (method)', def:false },
   { key:'fixfull',  label:'Full likely fix', def:false },
 ];
+// Sort value for a column (numeric where possible; strings compared lexically).
+function sortVal(r, key){
+  switch(key){
+    case 'priority': return r._priority;
+    case 'building': return shortName(r.id).toLowerCase();
+    case 'verdict':  return VERDICT_ORDER[r.verdict] ?? 99;
+    case 'why':      return whyTags(r).join(', ').toLowerCase();
+    case 'fix':      return shortFix(r.fix).toLowerCase();
+    case 'fixfull':  return (r.fix||'').toLowerCase();
+    case 'dollars':  return r.excess_dollars ?? -1;
+    case 'type':     return (r.type||'').toLowerCase();
+    case 'kwh':      return r.excess_kwh ?? -1;
+    case 'co2':      return r.excess_co2_kg ?? -1;
+    case 'cvrmse':   return r.cvrmse ?? 1e9;
+    case 'method':   return (r.flagged_by||'').toLowerCase();
+    default: return '';
+  }
+}
+// Plain-text value for CSV export.
+function rawVal(r, key){
+  switch(key){
+    case 'priority': return r._priority;
+    case 'building': return shortName(r.id);
+    case 'verdict':  return r.verdict;
+    case 'why':      return whyTags(r).join('; ');
+    case 'fix':      return shortFix(r.fix);
+    case 'fixfull':  return r.fix||'';
+    case 'dollars':  return r.excess_dollars ?? '';
+    case 'type':     return r.type||'';
+    case 'kwh':      return r.excess_kwh ?? '';
+    case 'co2':      return r.excess_co2_kg ?? '';
+    case 'cvrmse':   return (r.cvrmse==null?'':r.cvrmse);
+    case 'method':   return r.flagged_by||'';
+    default: return '';
+  }
+}
 const COL_STORE_KEY = 'heatcheck.columns.v1';
 
 function loadCols(){
@@ -569,13 +627,16 @@ function saveCols(set){
   catch(e){ /* storage blocked — in-memory only */ }
 }
 
-let state = { type:"All", verdict:"All", building:null, cols:null };
+let state = { type:"All", verdict:"All", building:null, cols:null,
+              sortKey:"priority", sortDir:1 };
 function colSet(){ if(!state.cols) state.cols = loadCols(); return state.cols; }
 
 // Cell value for a column key, as HTML.
 function cellHTML(r, key){
   switch(key){
-    case 'building': return esc(shortName(r.id));
+    case 'priority': return r._priority;
+    case 'building': return `<span class="bname">${esc(shortName(r.id))}</span>`
+                          + `<span class="btype">${esc(r.type)}</span>`;
     case 'verdict':  return badge(r.verdict);
     case 'why':      return `<span class="tags">${whyTags(r).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</span>`;
     case 'fix':      return `<span title="${attr(r.fix)}">${esc(shortFix(r.fix))}</span>`;
@@ -601,11 +662,11 @@ function shortFix(fix){
 }
 
 function show(view){
-  ["triage","detail","method","limits","data"].forEach(v=>{
+  ["priorities","detail","method","limits","data"].forEach(v=>{
     const b=document.getElementById("nav-"+v);
     if(b) b.setAttribute("aria-current", v===view ? "true":"false");
   });
-  if(view==="triage") renderTriage();
+  if(view==="priorities") renderPriorities();
   else if(view==="detail") renderDetail();
   else if(view==="method") renderMethod();
   else if(view==="limits") renderLimits();
@@ -613,21 +674,45 @@ function show(view){
   window.scrollTo(0,0);
 }
 
-function renderTriage(){
-  const c = DATA.cards;
-  const types = ["All", ...DATA.building_types];
-  const verdicts = ["All", ...DATA.ranked_verdicts];
+// Attach the default-order priority number once (1,2,3... in DATA.table order).
+DATA.table.forEach((r,i)=>{ r._priority = i+1; });
+
+function sortedFilteredRows(){
   let rows = DATA.table.filter(r =>
     (state.type==="All"||r.type===state.type) &&
     (state.verdict==="All"||r.verdict===state.verdict));
+  const k = state.sortKey, dir = state.sortDir;
+  rows = rows.slice().sort((a,b)=>{
+    const va = sortVal(a,k), vb = sortVal(b,k);
+    if(va<vb) return -1*dir; if(va>vb) return 1*dir;
+    return (a._priority-b._priority); // stable tiebreak by default order
+  });
+  return rows;
+}
+
+function sortBy(key){
+  if(state.sortKey===key){ state.sortDir *= -1; }
+  else { state.sortKey = key; state.sortDir = 1; }
+  renderPriorities();
+}
+function sortArrow(key){
+  if(state.sortKey!==key) return '';
+  return state.sortDir===1 ? ' ▲' : ' ▼';
+}
+
+function renderPriorities(){
+  const c = DATA.cards;
+  const types = ["All", ...DATA.building_types];
+  const verdicts = ["All", ...DATA.ranked_verdicts];
+  const rows = sortedFilteredRows();
 
   const cols = colSet();
   const active = COLUMNS.filter(cd => cd.always || cols.has(cd.key));
 
   const html = `
   <p class="eyebrow">Campus overview</p>
-  <h2>Triage</h2>
-  <p class="meta-line">Which buildings waste heat, ranked by evidence strength. Click any row for detail.</p>
+  <h2>Priorities</h2>
+  <p class="meta-line">Sorted by evidence strength, then dollars wasted. Click a column header to re-sort.</p>
   <div class="cards">
     <div class="card"><div class="num">${fmt(c.confirmed_count)}</div><div class="lbl">Confirmed waste buildings</div></div>
     <div class="card"><div class="num">${money(Math.round(c.confirmed_dollars))}/yr</div><div class="lbl">$/yr wasted</div><small>conservative: energy above the 90% upper bound</small></div>
@@ -636,18 +721,17 @@ function renderTriage(){
     <div class="card"><div class="num">${fmt(c.cant_judge_count)}</div><div class="lbl">Can't judge</div></div>
   </div>
   <div class="filters">
-    <div><label for="f-type">Building type</label>
-      <select id="f-type" onchange="state.type=this.value; renderTriage()">
+    <div><label class="flabel" for="f-type">Building type</label>
+      <select id="f-type" onchange="state.type=this.value; renderPriorities()">
         ${types.map(t=>`<option ${t===state.type?'selected':''}>${esc(t)}</option>`).join('')}
       </select></div>
-    <div><label for="f-verdict">Verdict</label>
-      <select id="f-verdict" onchange="state.verdict=this.value; renderTriage()">
+    <div><label class="flabel" for="f-verdict">Verdict</label>
+      <select id="f-verdict" onchange="state.verdict=this.value; renderPriorities()">
         ${verdicts.map(v=>`<option ${v===state.verdict?'selected':''}>${esc(v)}</option>`).join('')}
       </select></div>
     <div class="colpicker">
-      <label>&nbsp;</label>
       <button class="btn-outline" aria-expanded="false" onclick="toggleColMenu(event)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="#fff"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="#fff"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="8" cy="18" r="2" fill="#fff"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="#fff"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="#fff"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="8" cy="18" r="2" fill="#fff"/></svg>
         Customize columns (${active.length} of ${COLUMNS.length})
       </button>
       <div class="menu" id="col-menu" hidden>
@@ -656,12 +740,18 @@ function renderTriage(){
             onchange="toggleCol('${cd.key}', this.checked)"> ${esc(cd.label)}</label>`).join('')}
       </div>
     </div>
+    <div class="colpicker">
+      <button class="btn-outline" onclick="exportCSV()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        Export CSV
+      </button>
+    </div>
   </div>
 
   <div class="table-wrap">
     <table>
       <thead><tr>
-        ${active.map(cd=>`<th scope="col" class="${cd.num?'num':''}">${esc(cd.label)}</th>`).join('')}
+        ${active.map(cd=>`<th scope="col" class="th-sort ${cd.num?'num':''}" ${state.sortKey===cd.key?'aria-sort="'+(state.sortDir===1?'ascending':'descending')+'"':''} onclick="sortBy('${cd.key}')">${esc(cd.label)}${sortArrow(cd.key)}</th>`).join('')}
       </tr></thead>
       <tbody>
       ${rows.map(r=>`
@@ -677,7 +767,8 @@ function renderTriage(){
     ${rows.length===0?'<p>No buildings match these filters.</p>':''}
     ${rows.map(r=>`
       <div class="srow" tabindex="0" role="button" onclick="openBuilding('${attr(r.id)}')" onkeydown="if(event.key==='Enter')openBuilding('${attr(r.id)}')">
-        <div class="sname">${esc(shortName(r.id))} ${badge(r.verdict)}</div>
+        <div class="sname"><span class="bname">${esc(shortName(r.id))}</span> ${badge(r.verdict)}</div>
+        <div class="btype" style="margin-bottom:.3rem">${esc(r.type)}</div>
         ${active.filter(cd=>cd.key!=='building'&&cd.key!=='verdict').map(cd=>`
           <div class="sline"><span class="k">${esc(cd.label)}</span><span>${cellHTML(r, cd.key)}</span></div>`).join('')}
       </div>`).join('')}
@@ -714,7 +805,7 @@ function toggleCol(key, on){
   const s = colSet();
   if(on) s.add(key); else s.delete(key);
   saveCols(s);
-  renderTriage();
+  renderPriorities();
   // Re-open the menu after re-render so multiple toggles are easy.
   const m = document.getElementById('col-menu'); if(m) m.hidden = false;
 }
@@ -723,6 +814,30 @@ document.addEventListener('click', e=>{
   const m = document.getElementById('col-menu');
   if(m && !m.hidden && !e.target.closest('.colpicker')) m.hidden = true;
 });
+
+// Export the CURRENT view (filters + sort + visible columns) as CSV.
+function exportCSV(){
+  const cols = colSet();
+  const active = COLUMNS.filter(cd => cd.always || cols.has(cd.key));
+  const rows = sortedFilteredRows();
+  const today = new Date().toISOString().slice(0,10);
+  const q = s => {
+    const v = String(s==null?'':s);
+    return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v;
+  };
+  const lines = [];
+  // First line is a comment with date, site, and the conservative-excess note.
+  lines.push('# Heat Check priorities — ' + today + ' — site Hog — '
+    + 'Excess is conservative: energy above the 90% upper bound');
+  lines.push(active.map(cd=>q(cd.label)).join(','));
+  rows.forEach(r=> lines.push(active.map(cd=>q(rawVal(r, cd.key))).join(',')));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'heat-check-priorities.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(a.href);
+}
 
 function openBuilding(id){ state.building = id; show('detail'); }
 
@@ -734,7 +849,7 @@ function renderDetail(){
 
   const picker = b.weeks.map((w,i)=>`<option value="${i}" ${i===b.worst_week?'selected':''}>${w.label}${i===b.worst_week?' (worst week)':''}</option>`).join('');
   main.innerHTML = `
-    <div class="back"><button class="btn" onclick="show('triage')">&larr; Back to triage</button></div>
+    <div class="back"><button class="btn" onclick="show('priorities')">&larr; Back to priorities</button></div>
     <h2>${esc(shortName(b.id))}</h2>
     <p class="meta-line">${b.type} · ${badge(b.verdict)} ·
       Model trust: ${b.trustworthy?'trustworthy':'not trustworthy'}${b.cvrmse!=null?` (CV(RMSE) ${b.cvrmse}%)`:''} ·
@@ -834,7 +949,7 @@ function renderData(){
     <p>Scope: site Hog, steam meters only. Models trained on 2016; all results
     shown are for 2017. Steam in kWh, temperature in C.</p>`;
 }
-renderTriage();
+renderPriorities();
 </script>
 </body>
 </html>
