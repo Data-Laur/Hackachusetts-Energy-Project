@@ -1,73 +1,79 @@
 """
-_make_samples.py — one-off generator for the bring-your-own-data sample files.
+_make_samples.py — build the bring-your-own-data sample files from REAL data.
 
-Creates three small CSVs under samples/ that exercise the inbox ingestion hook:
-  - sample_A_long_mmbtu.csv : long format, steam in MMBtu, explicit unit in header
-  - sample_B_wide_kwh.csv   : wide format (one column per building), kWh
-  - sample_C_ambiguous.csv  : long format but the value column is just "Usage"
-                              with NO unit -> must be flagged, not guessed
+Pulls a handful of real Bull-site buildings from Datasets/steam_cleaned.csv (the
+BDG2 steam file) and writes three small CSVs under samples/ in deliberately messy
+formats, to exercise the inbox ingestion hook:
+  - sample_A_long_mmbtu.csv : long, "Date/Time","Bldg Name","Steam (MMBtu)"
+  - sample_B_wide_kwh.csv   : wide (one column per building), "Reading Time", kWh
+  - sample_C_ambiguous.csv  : long, value column "Usage" with NO unit (flag, don't guess)
 
-Data is synthetic (a simple temperature-driven steam pattern) so the files stay
-tiny and contain no real BDG2 data. Building names use the "Bull" site prefix.
+The published BDG2 steam values are in kWh. For sample A we convert kWh -> MMBtu
+so the ingester has to convert back. We take a short date window and only
+buildings with mostly-present, non-zero data so the files are small and useful.
 
-Run:  python samples/_make_samples.py
-Units: MMBtu and kWh as noted per file; temperature in degC (not needed here).
+Run from the repo root:  python samples/_make_samples.py
+Note: reads Datasets/ (gitignored); the small sample outputs are committed.
 """
 
-import numpy as np
 import pandas as pd
 
-RNG = np.random.default_rng(7)
-# 3-5 Bull buildings per file.
-A_BLDGS = ["Bull_education_Dawn", "Bull_office_Ivan", "Bull_lodging_Pearl"]
-B_BLDGS = ["Bull_office_Quinn", "Bull_education_Rosa", "Bull_assembly_Sam", "Bull_office_Tom"]
-C_BLDGS = ["Bull_office_Uma", "Bull_education_Vince", "Bull_lodging_Wes"]
+KWH_TO_MMBTU = 0.00341214  # 1 kWh = 0.00341214 MMBtu
 
-# Two weeks of hourly timestamps keeps each file well under 1 MB.
-HOURS = pd.date_range("2017-01-02 00:00", periods=24 * 14, freq="h")
-
-MMBTU_PER_KWH = 0.00341214  # 1 kWh = 0.00341214 MMBtu
+# A two-week window keeps each file well under 1 MB.
+START = "2017-01-09 00:00:00"
+END = "2017-01-22 23:00:00"
 
 
-def synth_kwh(n, base):
-    """A simple positive hourly steam series (kWh)."""
-    hour = np.arange(n) % 24
-    daily = 1 + 0.4 * np.cos((hour - 6) / 24 * 2 * np.pi)  # peak in early morning
-    noise = RNG.normal(1, 0.08, n).clip(0.5, 1.5)
-    return (base * daily * noise).round(2)
+def pick_buildings(df, n, exclude):
+    """Choose n Bull buildings in the window with the fewest missing/zeros."""
+    bull = [c for c in df.columns if c.startswith("Bull_") and c not in exclude]
+    quality = []
+    for b in bull:
+        s = df[b]
+        score = s.isna().mean() + (s == 0).mean()  # lower is cleaner
+        quality.append((score, b))
+    quality.sort()
+    return [b for _, b in quality[:n]]
 
 
-def make_long_mmbtu():
+def main():
+    df = pd.read_csv("Datasets/steam_cleaned.csv", parse_dates=["timestamp"])
+    df = df[(df["timestamp"] >= START) & (df["timestamp"] <= END)].reset_index(drop=True)
+
+    used = set()
+    a_bldgs = pick_buildings(df, 3, used); used.update(a_bldgs)
+    b_bldgs = pick_buildings(df, 4, used); used.update(b_bldgs)
+    c_bldgs = pick_buildings(df, 3, used); used.update(c_bldgs)
+
+    ts = df["timestamp"].dt.strftime("%Y-%m-%d %H:%M")
+
+    # --- Sample A: long format, steam in MMBtu (converted from the real kWh) ---
     rows = []
-    for b in A_BLDGS:
-        kwh = synth_kwh(len(HOURS), base=RNG.uniform(80, 200))
-        mmbtu = (kwh * MMBTU_PER_KWH).round(5)
-        for t, v in zip(HOURS, mmbtu):
-            rows.append({"Date/Time": t.strftime("%Y-%m-%d %H:%M"),
-                         "Bldg Name": b, "Steam (MMBtu)": v})
+    for b in a_bldgs:
+        mmbtu = (df[b] * KWH_TO_MMBTU).round(5)
+        for t, v in zip(ts, mmbtu):
+            rows.append({"Date/Time": t, "Bldg Name": b, "Steam (MMBtu)": v})
     pd.DataFrame(rows).to_csv("samples/sample_A_long_mmbtu.csv", index=False)
 
+    # --- Sample B: wide format, real kWh values, "Reading Time" column ---
+    wide = {"Reading Time": ts}
+    for b in b_bldgs:
+        wide[b] = df[b].round(2)
+    pd.DataFrame(wide).to_csv("samples/sample_B_wide_kwh.csv", index=False)
 
-def make_wide_kwh():
-    data = {"Reading Time": [t.strftime("%Y-%m-%d %H:%M") for t in HOURS]}
-    for b in B_BLDGS:
-        data[b] = synth_kwh(len(HOURS), base=RNG.uniform(100, 300))
-    pd.DataFrame(data).to_csv("samples/sample_B_wide_kwh.csv", index=False)
-
-
-def make_ambiguous():
+    # --- Sample C: long format, value column "Usage" with NO unit ---
     rows = []
-    for b in C_BLDGS:
-        kwh = synth_kwh(len(HOURS), base=RNG.uniform(90, 220))
-        for t, v in zip(HOURS, kwh):
-            # Value column has NO unit in its name on purpose.
-            rows.append({"Date/Time": t.strftime("%Y-%m-%d %H:%M"),
-                         "Bldg Name": b, "Usage": v})
+    for b in c_bldgs:
+        for t, v in zip(ts, df[b].round(2)):
+            rows.append({"Date/Time": t, "Bldg Name": b, "Usage": v})
     pd.DataFrame(rows).to_csv("samples/sample_C_ambiguous.csv", index=False)
+
+    print("Built from real Bull buildings:")
+    print("  A (MMBtu):", a_bldgs)
+    print("  B (kWh)  :", b_bldgs)
+    print("  C (Usage):", c_bldgs)
 
 
 if __name__ == "__main__":
-    make_long_mmbtu()
-    make_wide_kwh()
-    make_ambiguous()
-    print("Wrote sample_A_long_mmbtu.csv, sample_B_wide_kwh.csv, sample_C_ambiguous.csv")
+    main()

@@ -192,20 +192,83 @@ def write_mapping_report(path, mapping, extra=None):
         f.write("\n".join(lines) + "\n")
 
 
-def score(long_df, path):
+# Minimum data length (in hours) each scoring method needs to be meaningful.
+HOURS_PER_MONTH = 730  # ~365*24/12
+# The full weather-normalized model trains on one year and tests on another, so
+# it needs ~2 years (train 2016 + test 2017). A single dropped file almost never
+# has this, so the model is usually skipped for uploads.
+MODEL_MIN_HOURS = 12 * HOURS_PER_MONTH          # 12+ months to train a model
+PATTERN_MIN_HOURS = 3 * HOURS_PER_MONTH          # ~3 months for a stable pattern
+QUALITY_MIN_HOURS = 24 * 7                        # 1 week for a basic quality read
+
+
+def _methods_for(hours, has_weather):
     """
-    Score the ingested buildings with a lightweight version of the pipeline's
-    quality + warm-day logic (the full model needs 2016 training data, which a
-    dropped-in file won't have). We report per-building total steam and a simple
-    data-quality note, written to inbox/results/.
+    Decide which scoring methods can run for a building with this much data.
+
+    Returns (label, list_of_methods). We are explicit that an uploaded file
+    usually can only get the model-free checks, because the full model needs a
+    separate training year.
+    """
+    methods = []
+    if hours >= QUALITY_MIN_HOURS:
+        methods.append("data-quality check")
+    if hours >= PATTERN_MIN_HOURS:
+        # Setback needs weather (temperature); warm-day needs weather too.
+        if has_weather:
+            methods.append("pattern checks (setback + warm-day)")
+        else:
+            methods.append("pattern checks (setback, no-weather version)")
+    if hours >= MODEL_MIN_HOURS and has_weather:
+        methods.append("weather-normalized model + conformal band")
+
+    if "weather-normalized model + conformal band" in methods:
+        label = "Full model + pattern checks"
+    elif any(m.startswith("pattern") for m in methods):
+        label = "Pattern checks only: a full model needs 12+ months of data"
+    elif methods:
+        label = "Data-quality check only: not enough data for pattern checks"
+    else:
+        label = "Too little data to score (need at least 1 week)"
+    return label, methods
+
+
+def score(long_df, path, has_weather=False):
+    """
+    Score the ingested buildings.
+
+    IMPORTANT — what "scored" means for an uploaded file:
+      A dropped-in file has no separate 2016 training year, so the full
+      weather-normalized model + conformal band usually CANNOT run. What runs
+      depends on how much data each building has:
+        - >= 1 week   : data-quality check (missing %, zeros %).
+        - >= ~3 months: pattern checks (night/weekend setback; warm-day heating
+                        if weather is available).
+        - >= 12 months + weather: the full model + 90% conformal band.
+      Each building row states exactly which methods ran.
+
+    Weather: the pattern/warm-day and model methods need outdoor temperature.
+    This uploader does NOT fetch weather automatically (an arbitrary building_id
+    isn't tied to a known BDG2 site). So by default only the weather-FREE checks
+    run, and the report says so. To enable the temperature-dependent checks,
+    supply a matching weather file (future extension); here has_weather=False.
     """
     os.makedirs(os.path.join("inbox", "results"), exist_ok=True)
-    g = long_df.groupby("building_id")["steam_kwh"]
-    summary = pd.DataFrame({
-        "total_steam_kwh": g.sum().round(1),
-        "hours": g.size(),
-        "pct_zero": (g.apply(lambda s: (s == 0).mean()) * 100).round(1),
-    }).reset_index()
+    rows = []
+    for bid, s in long_df.groupby("building_id")["steam_kwh"]:
+        hours = int(s.size)
+        label, methods = _methods_for(hours, has_weather)
+        rows.append({
+            "building_id": bid,
+            "hours": hours,
+            "months_approx": round(hours / HOURS_PER_MONTH, 1),
+            "total_steam_kwh": round(float(s.sum()), 1),
+            "pct_missing": round(float(s.isna().mean()) * 100, 1),
+            "pct_zero": round(float((s == 0).mean()) * 100, 1),
+            "scored_as": label,
+            "methods_run": "; ".join(methods) if methods else "none",
+        })
+    summary = pd.DataFrame(rows)
     name = os.path.splitext(os.path.basename(path))[0]
     out_path = os.path.join("inbox", "results", f"{name}_scored.csv")
     summary.to_csv(out_path, index=False)
@@ -234,10 +297,26 @@ def process(path):
         return f"AMBIGUOUS: {os.path.basename(path)} — wrote inbox/mapping_report.md, stopped."
 
     long_df = to_long_kwh(df, mapping, path)
-    out_path, summary = score(long_df, path)
-    write_mapping_report(
-        path, mapping,
-        extra=f"## Result\nScored {len(summary)} buildings -> `{out_path}`.")
+    out_path, summary = score(long_df, path, has_weather=False)
+    labels = summary["scored_as"].value_counts().to_dict()
+    label_lines = "\n".join(f"  - {k}: {v} building(s)" for k, v in labels.items())
+    result = (
+        f"## Result\nScored {len(summary)} buildings -> `{out_path}`.\n\n"
+        "### What \"scored\" means here\n"
+        "A dropped-in file has no separate 2016 training year, so the full "
+        "weather-normalized model usually cannot run. Methods run per building "
+        "depend on data length:\n"
+        f"  - >= 1 week: data-quality check\n"
+        f"  - >= ~3 months: pattern checks (setback; warm-day needs weather)\n"
+        f"  - >= 12 months + weather: full model + 90% conformal band\n\n"
+        f"Per-building outcome:\n{label_lines}\n\n"
+        "### Weather\n"
+        "The pattern/warm-day and model methods need outdoor temperature. This "
+        "uploader does NOT fetch weather automatically — an arbitrary building_id "
+        "isn't tied to a known BDG2 site — so only weather-free checks ran. "
+        "Supply a matching weather file to enable the temperature-based checks."
+    )
+    write_mapping_report(path, mapping, extra=result)
     return f"OK: {os.path.basename(path)} — scored {len(summary)} buildings -> {out_path}"
 
 

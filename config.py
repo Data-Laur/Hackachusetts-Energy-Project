@@ -148,9 +148,10 @@ GAS_PRICE_PER_KWH = 0.05       # US dollars per kWh of gas input
 # DOE/ENERGY STAR steam-system guidance). Replace with your measured value.
 BOILER_EFFICIENCY = 0.80       # fraction (delivered steam kWh / gas input kWh)
 
-# CO2 emission factor for natural gas combustion. VERIFIED: EIA/EPA list
-# 53.06 kg CO2 per MMBtu for natural gas (HHV 1025–1050 Btu/scf). Converting:
-# 1 MMBtu = 293.07 kWh, so 53.06 / 293.07 = 0.1811 kg CO2 per kWh.
-# Source: https://www.eia.gov/environment/emissions/archive/coefficients.php
-# (EPA AP-42 1.4 Natural Gas Combustion gives the same ~53 kg/MMBtu figure.)
-EMISSION_FACTOR_KG_PER_KWH = 0.1811  # kg CO2 per kWh of gas input (was 0.18)
+# CO2 emission factor for natural gas combustion. VERIFIED via the fetch MCP
+# server against the CURRENT EIA coefficients page (release 2024-09-18, 2022
+# data, carbon factors from EPA GHG Inventory): Natural Gas = 52.91 kg CO2 per
+# MMBtu. Converting: 1 MMBtu = 293.07122 kWh, so 52.91 / 293.07122 = 0.1805.
+# Source: https://www.eia.gov/environment/emissions/co2_vol_mass.php
+# (An older archived EIA page listed 53.06; the current figure is 52.91.)
+EMISSION_FACTOR_KG_PER_KWH = 0.1805  # kg CO2 per kWh of gas input

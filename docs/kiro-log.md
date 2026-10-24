@@ -1,6 +1,28 @@
 # Kiro Log — Heat Check
 
-A running log of significant build steps, decisions, and results.
+A running log of significant build steps, decisions, and results. This file is
+the single merged log (the old root `KIRO_LOG.md` was folded in here in time
+order). The detailed prose entries follow the summary table below.
+
+## Summary (time order)
+
+Credits are shown where known. Most steps predate per-step credit tracking, so
+they are marked "—".
+
+| Time | What I asked Kiro | Kiro feature | Result | Credits |
+| --- | --- | --- | --- | --- |
+| 11:07 | Create steering files for stack, beginner style, secret keys | Steering | Made product.md, tech.md, security.md | — |
+| — | Build the spec (requirements/design/tasks), MVP first | Spec | Heat Check spec created; tasks reordered MVP-first | — |
+| — | Task 1: data pipeline (load, filter Hog, quality) | Spec task + bash | 97 Hog steam buildings; quality report; bad-data flags | — |
+| — | Refine quality checks (flatline, heating-season zeros, spikes) | Inline edits | 78 good / 19 flagged; spikes=0 (data pre-cleaned) | — |
+| — | Task 2: weather-normalized baseline + conformal 90% band | Spec task | 32/78 trustworthy (ASHRAE CV(RMSE) ≤ 30%) | — |
+| — | Task 3: two-method waste detection + ranking | Spec task | Exceedance + pattern metrics; $/CO2 via config | — |
+| — | Level-shift check, seasonal conformal, verdict tiers | Inline edits | 5 tiers; "Changed since 2016" excluded from totals | — |
+| — | Verdict thresholds, limitations, download script, repo checks | Inline + bash | All 5 tiers populated; scripts/download_data.py; repo public | — |
+| — | Task 4: interactive single-file HTML report | Spec task | docs/index.html (3.3 MB, Plotly CDN), 2 views | — |
+| — | Report scope fix; Kiro copilot; property-based tests | Steering + tests | copilot.md (manual); PBT caught a real band bug | — |
+| — | MCP source verification + bring-your-own-data workflow | MCP + Hooks | config assumptions cited; inbox ingest hook + samples | — |
+| — | Merge logs; tasks.md completion hook; MCP recheck; real samples; CI | Hooks + MCP + CI | Single log; CI workflow + badge; real Bull samples | — |
 
 ## Entry — Quality, features, and conformal improvements (tasks 1 & 2 rerun)
 
@@ -285,3 +307,62 @@ memorized constants — turning "probably ~0.18" into a cited 0.1811.
   Saved both reports: `samples/mapping_report_sample_A.md`,
   `samples/mapping_report_sample_C.md`. B also verified (wide, unit from filename).
 Kiro features used: MCP (web fetch) and agent hooks.
+
+
+## Entry — Log merge, task-completion hook, MCP recheck, real samples, CI
+
+### 1. Logs merged
+Folded the root `KIRO_LOG.md` into this file (added the time-ordered summary
+table at the top, with a Credits column — "—" where credits weren't tracked) and
+deleted `KIRO_LOG.md`. One log now: `docs/kiro-log.md`.
+
+### 2. Task-completion hook
+Added `.kiro/hooks/log-task-completion.json` (PostFileSave on `tasks.md`) calling
+`scripts/log_task_completion.py`. It counts completed top-level tasks and appends
+a row here only when the count goes UP (tracked via a small `.task_count` state
+file so cosmetic edits don't spam the log). Both this hook and the earlier
+`inbox-ingest` hook are in `.kiro/hooks/` and show in the Agent Hooks panel.
+
+### 3. MCP recheck (user fixed the server with a full uvx path)
+The user got the fetch MCP server connecting by using the absolute uvx path in
+`.kiro/settings/mcp.json`:
+`"command": "/Users/laurenchagaris/.local/bin/uvx"` (the bare `uvx` wasn't on the
+MCP process PATH). I used the **fetch MCP server** (not built-in fetch) to
+re-verify the natural-gas CO2 factor:
+- The requested archive URL
+  (https://www.eia.gov/environment/emissions/archive/coefficients.php) is under
+  `/archive/`, which EIA's robots.txt disallows — the MCP fetch server honors
+  robots.txt and refused (built-in fetch earlier did not). Honest finding, not a
+  setup failure.
+- I fetched the CURRENT EIA page instead
+  (https://www.eia.gov/environment/emissions/co2_vol_mass.php, released
+  2024-09-18, 2022 data, carbon factors from the EPA GHG Inventory): Natural Gas
+  = **52.91 kg CO2/MMBtu**. The older archived page said 53.06.
+- Updated config from 0.1811 -> **0.1805 kg CO2/kWh** (52.91 / 293.07122).
+  Headline: Confirmed-waste CO2 577,500 -> **575,587 kg/yr**; dollars and tiers
+  unchanged. Reran stages 3-4; property tests still pass (9/9).
+
+### 4. Sample files rebuilt from REAL Bull data
+`samples/_make_samples.py` now pulls real Bull-site buildings from
+`Datasets/steam_cleaned.csv` (a 2-week window, cleanest buildings), still in the
+three messy formats (A long MMBtu, B wide kWh, C ambiguous "Usage"), each < 1 MB.
+
+**How the ingester gets weather:** it does NOT fetch weather automatically. An
+arbitrary uploaded `building_id` isn't tied to a known BDG2 site, so only the
+weather-FREE checks run; the report says to supply a matching weather file to
+enable the temperature-based (setback/warm-day) and model methods.
+
+**What "scored" means for an upload** (now stated in the results CSV + report):
+a dropped-in file has no separate 2016 training year, so the full
+weather-normalized model usually can't run. Per building, by data length:
+`>= 1 week` data-quality check; `>= ~3 months` pattern checks; `>= 12 months +
+weather` full model + 90% conformal band. The 2-week samples therefore score as
+"Data-quality check only: not enough data for pattern checks".
+
+### 5. CI
+Added `.github/workflows/ci.yml` (runs on every push + PRs): installs
+requirements, runs the ingester on `samples/` (asserts sample C is flagged
+AMBIGUOUS), and runs the property-based tests (data-driven ones skip without
+Datasets/, pure-function ones always run). Added a CI status badge to
+`README.md`.
+Kiro features used: agent hooks, MCP (fetch server), and the test/CI loop.

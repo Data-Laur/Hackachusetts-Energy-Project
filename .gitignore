@@ -29,3 +29,6 @@ outputs/
 inbox/*.csv
 inbox/results/
 inbox/mapping_report.md
+
+# Local hook state (per-machine task-completion tracking)
+.kiro/specs/heat-check/.task_count

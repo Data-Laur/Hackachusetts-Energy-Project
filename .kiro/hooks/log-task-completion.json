@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Log task completion",
+      "trigger": "PostFileSave",
+      "description": "When the Heat Check tasks.md is saved and a task is newly marked complete ([x]), append a row to docs/kiro-log.md recording which task was completed.",
+      "matcher": "tasks\\.md$",
+      "action": {
+        "type": "command",
+        "command": "python scripts/log_task_completion.py"
+      }
+    }
+  ]
+}

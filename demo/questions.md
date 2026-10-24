@@ -12,8 +12,8 @@ Units: steam/excess in kWh, money in $, emissions in kg CO2, temperature in °C.
 
 ### Q1. Which 5 buildings waste the most heat?
 **Answer (from `waste_ranking.csv`, Confirmed waste by counted excess):**
-1. Hog_education_Caridad — 1,063,584 kWh · $66,474 · 240,769 kg CO2
-2. Hog_education_Sonia — 739,601 kWh · $46,225 · 167,427 kg CO2
+1. Hog_education_Caridad — 1,063,584 kWh · $66,474 · 239,971 kg CO2
+2. Hog_education_Sonia — 739,601 kWh · $46,225 · 166,872 kg CO2
 3. Hog_office_Joey — 142,452 kWh · $8,903 · 32,052 kg CO2
 4. Hog_education_Luvenia — 137,525 kWh · $8,595 · 30,943 kg CO2
 5. Hog_education_Jewel — 120,372 kWh · $7,523 · 27,084 kg CO2
@@ -24,14 +24,14 @@ real over-use is at least this much.
 
 ### Q2. How much money and CO2 does confirmed waste add up to?
 **Answer:** Across the **10 Confirmed waste** buildings: **2,551,077 kWh/yr**,
-**$159,442/yr**, **577,500 kg CO2/yr**. Conservative (above the 90% upper bound).
+**$159,442/yr**, **575,587 kg CO2/yr**. Conservative (above the 90% upper bound).
 Source: `waste_ranking.csv`, Confirmed waste rows only.
 
 ### Q3. Why is Hog_education_Caridad flagged?
 **Answer:** Verdict **Confirmed waste**; model trustworthy (CV(RMSE) 24.5%).
 Flagged by exceedance + heating on warm days: it exceeds its 90% band in far more
 than the ~5% of hours expected by chance, and uses steam on days warmer than
-18 °C. Counted excess 1,063,584 kWh ($66,474; 240,769 kg CO2), conservative
+18 °C. Counted excess 1,063,584 kWh ($66,474; 239,971 kg CO2), conservative
 (above the upper bound). Likely fix: outdoor-temp heating lockout and check
 valves. Source: `waste_ranking.csv`.
 
