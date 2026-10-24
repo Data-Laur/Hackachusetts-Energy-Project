@@ -693,3 +693,38 @@ The limitations section was dumping raw Markdown into a `<pre>` (literal `**`,
 Headless check (Playwright) of the Limits view at 1280 and 390: 7 `<h3>` + 8
 `<p>`, no literal `**`, no literal `- ` bullets, no page overflow. Property tests
 11/11; ingester sample run OK. Report regenerated with the Render upload link.
+
+
+## Entry — Detail charts + upload results table polish
+
+### Building detail charts (src/report.py)
+1. Actual-vs-expected line chart now uses a real **date axis**: one tick per day,
+   labeled horizontally like "Mon Oct 30" (tickformat %a %b %-d, tickangle 0),
+   no "Time" axis title, legend moved to top-right above the plot. (Week data is
+   now stored as full ISO datetimes so Plotly treats the axis as dates.)
+2. Heatmap labels every 3 hours horizontally (12a, 3a, 6a, 9a, 12p, 3p, 6p, 9p)
+   via explicit tickvals/ticktext; extra bottom margin so "Hour of day" doesn't
+   overlap the labels.
+3. Colors: Expected is soft gray (#B8C2CC), the 90% band is light gray, Actual is
+   ember, in BOTH the line chart and the monthly bars, so actual stands out.
+   Removed the duplicate in-chart titles (section headings remain); added a
+   heading above the week chart.
+4. Headless check (Playwright) at 1024/1280/1440: all three charts render,
+   week ticks = "Mon Oct 30..." horizontal, heat ticks = "12a..9p" horizontal,
+   no page overflow.
+
+### Upload results table (app.py)
+- Human-readable headers: Building, City, Climate, Setback ratio, Hours above
+  18 C, Warm-day steam share, Warm-day flag.
+- The repeated "how scored" note now shows ONCE in a summary box above the table
+  (not per row); the warm-climate caveat already appears once in the mapping
+  report's Climate section, so it is not repeated.
+- Value formatting: percentages with %, flags as Yes/No, blank city as "Unknown",
+  setback ratio to 2 dp, building shown as the leaf name.
+- Styling matches the Priorities table (wrap between words, never mid-word;
+  numeric right-align). Below 700px, rows switch to stacked cards.
+- Verified via TestClient: headers readable, note once, %/Yes/No formatting,
+  stacked cards present, sample C still stops (ambiguous, no scored table).
+
+Property tests 11/11; ingester sample run OK. Report regenerated with the Render
+upload link.

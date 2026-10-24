@@ -59,14 +59,29 @@ PAGE_HEAD = """<!DOCTYPE html><html lang="en"><head>
   .btn:hover{background:#097063}
   .btn-outline{display:inline-block;background:#fff;color:var(--teal-text);border:1px solid var(--teal);
     border-radius:8px;padding:.5rem .9rem;font-weight:600;text-decoration:none;margin-right:.4rem}
-  table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
-  th,td{border-bottom:1px solid var(--border);padding:.45rem .6rem;text-align:left;
-    overflow-wrap:anywhere;vertical-align:top}
-  th{background:#EAF0F6;color:var(--ink);text-transform:uppercase;font-size:.72rem;letter-spacing:.04em}
+  /* Table styled like the Priorities table: wrap between words, never mid-word. */
+  .table-wrap{width:100%;max-width:100%}
+  table{border-collapse:collapse;width:100%;font-size:1rem;font-variant-numeric:tabular-nums}
+  th,td{border-bottom:1px solid var(--border);padding:.6rem .7rem;text-align:left;
+    overflow-wrap:break-word;word-break:normal;hyphens:none;vertical-align:top}
+  td.num,th.num{text-align:right}
+  th{background:#EAF0F6;color:var(--ink);text-transform:uppercase;font-size:1rem;
+    font-weight:600;letter-spacing:.04em}
+  /* Notes shown once, above the table. */
+  .notebox{background:#EEF6F5;border:1px solid var(--border);border-radius:8px;
+    padding:.6rem .9rem;margin-bottom:1rem;font-size:1rem}
+  .notebox ul{margin:.4rem 0 0;padding-left:1.1rem}
+  /* Stacked cards for phones (shown below 700px). */
+  .stack{display:none}
+  .stack .srow{border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+  .stack .srow .sname{font-weight:600;color:var(--ink);margin-bottom:.3rem;overflow-wrap:break-word}
+  .stack .srow .sline{display:flex;justify-content:space-between;gap:.75rem;padding:.2rem 0}
+  .stack .srow .sline .k{color:var(--muted)}
   pre.notes{white-space:pre-wrap;background:var(--card);border:1px solid var(--border);
     border-radius:10px;padding:1rem;font-family:inherit}
   .stop{border-left:4px solid var(--ember);padding-left:.8rem}
   @media(max-width:720px){header .tagline{display:none}}
+  @media(max-width:700px){.table-wrap{display:none}.stack{display:block}}
 </style></head><body>
 <header><img src="/assets/logo.svg" alt=""><span class="wordmark">Heat Check</span>
 <span class="tagline">Find which buildings waste heat, and what to fix first.</span></header>
@@ -178,22 +193,93 @@ def _results_html(result):
 
     summary = result["summary"]
     if summary is not None and len(summary):
-        cols = [c for c in ["building_id", "city", "climate", "scored_as",
-                            "setback_ratio", "pct_hours_above_18c",
-                            "warm_day_share_pct", "warm_day_flag", "warm_day_note"]
-                if c in summary.columns]
-        head = "".join(f"<th>{_html.escape(c)}</th>" for c in cols)
-        body = ""
-        for _, r in summary.iterrows():
-            body += "<tr>" + "".join(
-                f"<td>{_html.escape(str(r[c]))}</td>" for c in cols) + "</tr>"
-        parts.append('<div class="card"><h3>Scored buildings</h3>'
-                     f"<table><thead><tr>{head}</tr></thead><tbody>{body}"
-                     "</tbody></table></div>")
+        parts.append(_scored_section(summary))
     parts.append('<p><a href="/upload">&larr; Upload another file</a> · '
                  '<a href="/">Back to the report</a></p>')
     parts.append(PAGE_FOOT)
     return "\n".join(parts)
+
+
+# Human-readable column headers, shown columns, and whether each is numeric.
+SCORED_COLUMNS = [
+    ("building_id", "Building", False),
+    ("city", "City", False),
+    ("climate", "Climate", False),
+    ("setback_ratio", "Setback ratio", True),
+    ("pct_hours_above_18c", "Hours above 18 C", True),
+    ("warm_day_share_pct", "Warm-day steam share", True),
+    ("warm_day_flag", "Warm-day flag", False),
+]
+
+
+def _leaf(name):
+    parts = str(name).split("_")
+    return parts[-1] if parts else str(name)
+
+
+def _fmt_val(key, val):
+    """Format one value for display (percentages, flags, blank city)."""
+    import pandas as _pd
+    if key == "building_id":
+        return _html.escape(_leaf(val))
+    if key == "city":
+        s = "" if val is None else str(val).strip()
+        return _html.escape(s if s and s.lower() != "nan" else "Unknown")
+    if key == "climate":
+        return _html.escape("" if val is None else str(val).capitalize())
+    if key == "warm_day_flag":
+        if _pd.isna(val):
+            return "-"
+        return "Yes" if bool(val) else "No"
+    if _pd.isna(val):
+        return "-"
+    if key in ("pct_hours_above_18c", "warm_day_share_pct"):
+        return f"{float(val):.1f}%"
+    if key == "setback_ratio":
+        return f"{float(val):.2f}"
+    return _html.escape(str(val))
+
+
+def _scored_section(summary):
+    """Scored table with readable headers; notes shown once in a summary box."""
+    cols = [(k, lbl, num) for (k, lbl, num) in SCORED_COLUMNS
+            if k in summary.columns]
+
+    # Collect the repeated "how scored" note ONCE (instead of per row). The
+    # warm-climate caveat already appears once in the mapping report's Climate
+    # section above, so we don't repeat it here.
+    notes = []
+    if "scored_as" in summary.columns:
+        for v in summary["scored_as"].dropna().unique():
+            notes.append(str(v))
+    note_box = ""
+    if notes:
+        items = "".join(f"<li>{_html.escape(n)}</li>" for n in notes)
+        note_box = ('<div class="notebox"><strong>How these were scored</strong>'
+                    f"<ul>{items}</ul></div>")
+
+    head = "".join(
+        f'<th class="{"num" if num else ""}">{_html.escape(lbl)}</th>'
+        for (_, lbl, num) in cols)
+    rows_html = ""
+    cards_html = ""
+    for _, r in summary.iterrows():
+        tds = "".join(
+            f'<td class="{"num" if num else ""}">{_fmt_val(k, r[k])}</td>'
+            for (k, _, num) in cols)
+        rows_html += f"<tr>{tds}</tr>"
+        # Stacked card: building name heading + one line per remaining field.
+        lines = "".join(
+            f'<div class="sline"><span class="k">{_html.escape(lbl)}</span>'
+            f'<span>{_fmt_val(k, r[k])}</span></div>'
+            for (k, lbl, num) in cols if k != "building_id")
+        cards_html += (f'<div class="srow"><div class="sname">'
+                       f'{_fmt_val("building_id", r["building_id"])}</div>{lines}</div>')
+
+    return (f'<div class="card"><h3>Scored buildings</h3>{note_box}'
+            f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead>'
+            f'<tbody>{rows_html}</tbody></table></div>'
+            f'<div class="stack">{cards_html}</div></div>')
 
 
 @app.post("/upload", response_class=HTMLResponse)

@@ -110,7 +110,8 @@ def worst_week_and_weeks(g):
         weeks.append(
             {
                 "label": pd.Timestamp(wk).strftime("%Y-%m-%d"),
-                "t": wg["timestamp"].dt.strftime("%m-%d %H:00").tolist(),
+                # Full ISO datetimes so Plotly renders a real date axis.
+                "t": wg["timestamp"].dt.strftime("%Y-%m-%d %H:%M").tolist(),
                 "actual": wg["actual"].round(0).tolist(),
                 "expected": wg["expected"].round(0).tolist(),
                 "lower": wg["lower90"].round(0).tolist(),
@@ -944,12 +945,13 @@ function renderDetail(){
   const picker = b.weeks.map((w,i)=>`<option value="${i}" ${i===b.worst_week?'selected':''}>${w.label}${i===b.worst_week?' (worst week)':''}</option>`).join('');
   main.innerHTML = `
     <div class="back"><button class="btn" onclick="show('priorities')">&larr; Back to priorities</button></div>
-    <h2>${esc(shortName(b.id))}</h2>
+    <h2>${esc(leafName(b.id))}</h2>
     <p class="meta-line">${b.type} · ${badge(b.verdict)} ·
       Model trust: ${b.trustworthy?'trustworthy':'not trustworthy'}${b.cvrmse!=null?` (CV(RMSE) ${b.cvrmse}%)`:''} ·
       Likely fix: <strong>${b.fix}</strong></p>
+    <h3>Actual vs expected steam, with 90% band (kWh)</h3>
     <div class="filters">
-      <div><label for="wk">Week (actual vs expected)</label>
+      <div><label class="flabel" for="wk">Week</label>
         <select id="wk" onchange="drawWeek('${b.id}', this.value)">${picker}</select></div>
     </div>
     <div id="chart-week" class="chart" role="img" aria-label="Actual vs expected steam with 90% band"></div>
@@ -962,16 +964,25 @@ function renderDetail(){
   drawMonth(b);
 }
 
-const LAYOUT = (title,xt,yt)=>({title:{text:title, font:{color:'#0B2545', size:15}},
-  xaxis:{title:xt}, yaxis:{title:yt}, margin:{t:44,r:20,b:50,l:60},
-  font:{family:'Inter, system-ui, sans-serif', color:'#1f2a37'},
-  paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff', legend:{orientation:'h'}});
+// Chart colors: actual (over-use) stands out in ember; the expected baseline is
+// a soft gray and the 90% band is light gray, so actual reads clearly.
+const C_ACTUAL   = '#E4572E';              // ember
+const C_EXPECTED = '#B8C2CC';              // soft gray
+const C_BANDFILL = 'rgba(184,194,204,0.30)'; // light gray band
 
-// Brand chart colors, consistent with the verdict palette:
-// teal = expected (baseline), ember = actual (over-use / waste).
-const C_EXPECTED = '#0E9F8F';   // teal
-const C_ACTUAL   = '#E4572E';   // ember
-const C_BANDFILL = 'rgba(14,159,143,0.15)';  // teal-tinted 90% band
+// Base layout: no chart title (the section heading covers it), Inter font,
+// legend at the top-right above the plot.
+function baseLayout(xt, yt){
+  return {
+    margin:{t:34, r:16, b:52, l:64},
+    font:{family:'Inter, system-ui, sans-serif', color:'#1f2a37', size:13},
+    paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
+    xaxis:{title:xt ? {text:xt, standoff:12} : undefined, automargin:true},
+    yaxis:{title:yt ? {text:yt, standoff:8} : undefined, automargin:true},
+    legend:{orientation:'h', x:1, xanchor:'right', y:1.12, yanchor:'bottom'},
+  };
+}
+
 function drawWeek(id, idx){
   const b = DATA.buildings.find(x=>x.id===id); const w = b.weeks[idx];
   const band = {x:w.t.concat([...w.t].reverse()), y:w.upper.concat([...w.lower].reverse()),
@@ -979,20 +990,32 @@ function drawWeek(id, idx){
     name:'90% band', hoverinfo:'skip'};
   const exp = {x:w.t, y:w.expected, name:'Expected', mode:'lines', line:{color:C_EXPECTED, width:2}};
   const act = {x:w.t, y:w.actual, name:'Actual', mode:'lines', line:{color:C_ACTUAL, width:2}};
-  Plotly.newPlot('chart-week', [band,exp,act], LAYOUT('Actual vs expected steam (kWh), '+w.label,'Time','Steam (kWh)'), {displayModeBar:false, responsive:true});
+  const layout = baseLayout(undefined, 'Steam (kWh)');
+  // Real date axis: one tick per day, horizontal labels like "Mon Oct 30".
+  layout.xaxis = {type:'date', dtick:86400000, tickformat:'%a %b %-d',
+    tickangle:0, automargin:true, ticklabelmode:'period'};
+  Plotly.newPlot('chart-week', [band,exp,act], layout, {displayModeBar:false, responsive:true});
 }
 function drawHeat(b){
   const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const hours=[...Array(24).keys()].map(h=>h+':00');
+  const hours=[...Array(24).keys()];
+  // Label every 3 hours: 12a, 3a, 6a, 9a, 12p, 3p, 6p, 9p.
+  const ampm = h => { const p=h<12?'a':'p'; let hr=h%12; if(hr===0)hr=12; return hr+p; };
+  const tickvals = [0,3,6,9,12,15,18,21];
+  const layout = baseLayout('Hour of day', 'Day of week');
+  layout.xaxis = {title:{text:'Hour of day', standoff:14}, tickmode:'array',
+    tickvals:tickvals, ticktext:tickvals.map(ampm), tickangle:0, automargin:true};
+  layout.margin = {t:20, r:16, b:60, l:64};
   Plotly.newPlot('chart-heat', [{z:b.heatmap, x:hours, y:days, type:'heatmap',
     colorscale:[[0,'#F4F7FA'],[1,C_ACTUAL]], colorbar:{title:'kWh'}}],
-    LAYOUT('Total excess by hour x day','Hour of day','Day of week'), {displayModeBar:false, responsive:true});
+    layout, {displayModeBar:false, responsive:true});
 }
 function drawMonth(b){
   const m=b.monthly;
   const act={x:m.months, y:m.actual, type:'bar', name:'Actual', marker:{color:C_ACTUAL}};
   const exp={x:m.months, y:m.expected, type:'bar', name:'Expected', marker:{color:C_EXPECTED}};
-  Plotly.newPlot('chart-month', [act,exp], {...LAYOUT('Monthly actual vs expected (kWh)','Month','Steam (kWh)'), barmode:'group'}, {displayModeBar:false, responsive:true});
+  const layout = baseLayout('Month', 'Steam (kWh)'); layout.barmode='group';
+  Plotly.newPlot('chart-month', [act,exp], layout, {displayModeBar:false, responsive:true});
 }
 
 function renderMethod(){
