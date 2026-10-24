@@ -1,5 +1,5 @@
 """
-report.py — STAGE 4 of Heat Check.
+report.py: STAGE 4 of Heat Check.
 
 Builds ONE interactive, self-contained web page at docs/index.html from the
 computed results. No server and no Streamlit: the page is plain HTML + CSS +
@@ -73,7 +73,7 @@ def pattern_text(row):
         parts.append("Heating on warm days")
     if "exceedance" in str(row.get("flagged_by", "")):
         parts.append("Uses more than expected")
-    return "; ".join(parts) if parts else "—"
+    return "; ".join(parts) if parts else "-"
 
 
 # How many weeks to offer in the per-building picker. We keep the worst N weeks
@@ -160,7 +160,7 @@ def other_reason(verdict, row):
     if verdict == "Within expected range":
         return "Model is trustworthy and use is within the expected 90% band."
     if verdict == "Changed since 2016":
-        return (f"Higher use spread across {int(row['n_months'])} months — looks "
+        return (f"Higher use spread across {int(row['n_months'])} months: looks "
                 "like a baseline change since 2016, not specific waste.")
     if verdict == "Can't judge":
         if not row["trustworthy"]:
@@ -321,7 +321,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Heat Check — Campus Heating Priorities</title>
+<title>Heat Check: Campus Heating Priorities</title>
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -352,7 +352,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
          font-size: 1rem; font-feature-settings: "tnum" 1; }  /* tabular figures */
   a { color: var(--teal-text); }
   h2, h3 { color: var(--ink); }
-  /* Uppercase section labels — kept to 16px for the min-size rule. */
+  /* Uppercase section labels, kept to 16px for the min-size rule. */
   .eyebrow { text-transform: uppercase; letter-spacing: .06em; font-size: 1rem;
              font-weight: 600; color: var(--muted); margin: 0 0 .5rem; }
 
@@ -532,8 +532,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </div>
 <script>
 const DATA = __DATA__;
-const fmt = n => (n==null? "—" : Number(n).toLocaleString());
-const money = n => (n==null? "—" : "$" + Number(n).toLocaleString());
+const fmt = n => (n==null? "-" : Number(n).toLocaleString());
+const money = n => (n==null? "-" : "$" + Number(n).toLocaleString());
 const BADGE = {
   "Confirmed waste":"b-confirmed","Worth a look":"b-worth",
   "Within expected range":"b-within","Changed since 2016":"b-changed","Can't judge":"b-cant"
@@ -553,7 +553,7 @@ function whyTags(r){
   if(f.includes('warm day') || f.includes('warm-day')) tags.push('Warm-day heating');
   if(f.includes('setback')) tags.push('No setback');
   if(f.includes('level shift')) tags.push('Level shift');
-  if(!tags.length) tags.push('—');
+  if(!tags.length) tags.push('-');
   return tags;
 }
 
@@ -619,12 +619,12 @@ function loadCols(){
   try {
     const raw = localStorage.getItem(COL_STORE_KEY);
     if(raw){ const saved = JSON.parse(raw); if(Array.isArray(saved) && saved.length) chosen = saved; }
-  } catch(e){ /* storage blocked — fall back to defaults */ }
+  } catch(e){ /* storage blocked, fall back to defaults */ }
   return new Set(chosen);
 }
 function saveCols(set){
   try { localStorage.setItem(COL_STORE_KEY, JSON.stringify([...set])); }
-  catch(e){ /* storage blocked — in-memory only */ }
+  catch(e){ /* storage blocked, in-memory only */ }
 }
 
 let state = { type:"All", verdict:"All", building:null, cols:null,
@@ -645,14 +645,14 @@ function cellHTML(r, key){
     case 'type':     return esc(r.type);
     case 'kwh':      return fmt(r.excess_kwh);
     case 'co2':      return fmt(r.excess_co2_kg);
-    case 'cvrmse':   return (r.cvrmse==null?'—':r.cvrmse+'%');
+    case 'cvrmse':   return (r.cvrmse==null?'-':r.cvrmse+'%');
     case 'method':   return esc(r.flagged_by);
     default: return '';
   }
 }
 // A few-word version of the likely fix (full text shown on hover).
 function shortFix(fix){
-  if(!fix) return '—';
+  if(!fix) return '-';
   const map = {
     'Reprogram BMS schedule (near zero cost)':'BMS schedule',
     'Outdoor-temp heating lockout, check valves (low cost)':'Temp lockout + valves',
@@ -775,7 +775,7 @@ function renderPriorities(){
   </div>
 
   <details>
-    <summary>Buildings we don't rank (${DATA.others.length}) — and why</summary>
+    <summary>Buildings we don't rank (${DATA.others.length}), and why</summary>
     <div class="table-wrap">
       <table>
         <thead><tr><th scope="col">Building</th><th scope="col">Type</th><th scope="col">Verdict</th><th scope="col">Reason</th></tr></thead>
@@ -827,7 +827,7 @@ function exportCSV(){
   };
   const lines = [];
   // First line is a comment with date, site, and the conservative-excess note.
-  lines.push('# Heat Check priorities — ' + today + ' — site Hog — '
+  lines.push('# Heat Check priorities, ' + today + ', site Hog. '
     + 'Excess is conservative: energy above the 90% upper bound');
   lines.push(active.map(cd=>q(cd.label)).join(','));
   rows.forEach(r=> lines.push(active.map(cd=>q(rawVal(r, cd.key))).join(',')));
@@ -885,7 +885,7 @@ function drawWeek(id, idx){
     name:'90% band', hoverinfo:'skip'};
   const exp = {x:w.t, y:w.expected, name:'Expected', mode:'lines', line:{color:C_EXPECTED, width:2}};
   const act = {x:w.t, y:w.actual, name:'Actual', mode:'lines', line:{color:C_ACTUAL, width:2}};
-  Plotly.newPlot('chart-week', [band,exp,act], LAYOUT('Actual vs expected steam (kWh) — '+w.label,'Time','Steam (kWh)'), {displayModeBar:false, responsive:true});
+  Plotly.newPlot('chart-week', [band,exp,act], LAYOUT('Actual vs expected steam (kWh), '+w.label,'Time','Steam (kWh)'), {displayModeBar:false, responsive:true});
 }
 function drawHeat(b){
   const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -922,7 +922,7 @@ function renderMethod(){
     </ol>
     <h3>How well the bands hold up</h3>
     <p>On a same-year control (calibrate on half the held-out 2016 weeks, test on the
-    other half) the 90% band covers <strong>89.5%</strong> of hours — right on target.
+    other half) the 90% band covers <strong>89.5%</strong> of hours, right on target.
     On 2017 it covers <strong>80.7%</strong>. That gap is real year-over-year change,
     not a miscalibrated band. We deliberately did not widen the bands to force 90% on
     2017, because that would hide the very excess we want to find.</p>
@@ -939,7 +939,7 @@ function renderLimits(){
 function renderData(){
   document.getElementById("main").innerHTML = `
     <h2>Data</h2>
-    <p>Source: <strong>Building Data Genome Project 2 (BDG2)</strong> — an open set of
+    <p>Source: <strong>Building Data Genome Project 2 (BDG2)</strong>, an open set of
     hourly meter data from non-residential buildings.</p>
     <p><a href="https://github.com/buds-lab/building-data-genome-project-2">github.com/buds-lab/building-data-genome-project-2</a></p>
     <p>Citation: Miller, C., Kathirgamanathan, A., Picchetti, B. et al. The Building

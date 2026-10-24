@@ -1,5 +1,5 @@
 """
-app.py — small self-hosting web app for the Heat Check upload flow (FastAPI).
+app.py: small self-hosting web app for the Heat Check upload flow (FastAPI).
 
 Routes:
   GET  /          -> serves the precomputed Hog report (docs/index.html).
@@ -40,7 +40,7 @@ app = FastAPI(title="Heat Check")
 # Shared brand bits so the upload pages match the report.
 PAGE_HEAD = """<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Heat Check — Upload your data</title>
+<title>Heat Check: Upload your data</title>
 <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -148,7 +148,7 @@ def upload_form():
     return HTMLResponse(PAGE_HEAD + """
       <h1>Upload your data</h1>
       <p>Drop a CSV of hourly steam readings. We detect the format, map columns,
-      convert units, and score it — or stop and ask if anything is ambiguous. Your
+      convert units, and score it, or stop and ask if anything is ambiguous. Your
       file is processed in a temporary folder and deleted right after.</p>
       <div class="card">
         <form action="/upload" method="post" enctype="multipart/form-data">

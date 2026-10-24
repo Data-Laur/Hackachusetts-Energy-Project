@@ -1,10 +1,11 @@
-# Render Blueprint for the Heat Check app (free tier, Docker).
+# Render Blueprint for the Heat Check app (Starter instance, Docker).
+# This file is a reference; deployment is via Render's "New Web Service" form.
 # Docs: https://render.com/docs/blueprint-spec
 services:
   - type: web
     name: heat-check
     runtime: docker
-    plan: free
+    plan: starter
     dockerfilePath: ./Dockerfile
     healthCheckPath: /healthz
     autoDeploy: true

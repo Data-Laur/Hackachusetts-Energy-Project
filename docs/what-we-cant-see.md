@@ -11,7 +11,7 @@ section (task 4). Units: steam in kWh, temperature in °C.
 
 - **Year-over-year drift limits accuracy.** Our 90% prediction bands cover 80.7%
   of 2017 hours, but an in-distribution control (calibrate on half the 2016
-  holdout weeks, test on the other half) covers 89.5% — right on target. That gap
+  holdout weeks, test on the other half) covers 89.5%, right on target. That gap
   means 2017 genuinely behaves differently from 2016 for many buildings (real
   drift), not that the bands are miscalibrated. We deliberately did NOT widen the
   bands to force 90% on 2017, because that would hide the very excess we want to

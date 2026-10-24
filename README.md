@@ -16,7 +16,7 @@ calibrated uncertainty, and refuses to answer when the evidence is weak.
 - Building heating is one of the largest sources of campus greenhouse-gas
   emissions.
 - Universities are setting climate targets and need to act on their **biggest
-  emitters first** — but it's hard to tell real waste from normal variation.
+  emitters first**, but it's hard to tell real waste from normal variation.
 - Facilities teams are stretched; they need a short, trustworthy list of where to
   look and what to try, not another dashboard of raw meters.
 
@@ -29,7 +29,7 @@ calibrated uncertainty, and refuses to answer when the evidence is weak.
   with CSV export) and suggests a likely fix.
 - **Refuses to guess** when a building's model isn't trustworthy or its data is
   poor ("Can't judge").
-- Ships one self-contained, interactive HTML report — no server to run.
+- Ships one self-contained, interactive HTML report, no server to run.
 
 ## How to run
 
@@ -87,9 +87,9 @@ ask** if anything is ambiguous (e.g. a value column with no unit). Results go to
 
 For the Hog site (Minneapolis area), across **10 Confirmed-waste** buildings:
 
-- **~2,551,077 kWh/yr** excess steam (conservative — above the 90% upper bound)
+- **~2,551,077 kWh/yr** excess steam (conservative: above the 90% upper bound)
 - **~$159,442/yr** and **~575,587 kg CO2/yr**
-- Top single building: **Hog_education_Caridad** — ~1,063,584 kWh ≈ $66,474 /
+- Top single building: **Hog_education_Caridad**, ~1,063,584 kWh ≈ $66,474 /
   239,971 kg CO2.
 
 Tiers: 10 Confirmed waste · 28 Worth a look · 8 Within expected range ·
@@ -99,7 +99,7 @@ Tiers: 10 Confirmed waste · 28 Worth a look · 8 Within expected range ·
 
 See [`docs/what-we-cant-see.md`](docs/what-we-cant-see.md). In short:
 
-- 2017 covers 80.7% of hours vs 89.5% in-distribution — real year-over-year drift,
+- 2017 covers 80.7% of hours vs 89.5% in-distribution: real year-over-year drift,
   not miscalibration (we don't widen bands to hide it).
 - The level-shift rule can miss changes that start partway through a year.
 - Steam meters only, one site; no electricity, occupancy, or sub-metering.
@@ -137,15 +137,15 @@ Full build log: [`docs/kiro-log.md`](docs/kiro-log.md). Highlights:
 - **Specs.** Built the whole thing from a spec (requirements → design → tasks),
   reordered so an MVP (tasks 1–4) came first and stood alone.
 - **Steering.** Project rules (beginner-friendly code, cite sources, label units)
-  plus a **manual-inclusion** copilot steering file — manual because its
+  plus a **manual-inclusion** copilot steering file, manual because its
   answer-only-from-outputs rules apply when asking about results, not to every
   coding turn.
 - **Agent hooks.** (1) An `inbox/` hook that ingests any dropped CSV; (2) a hook
   that appends a log row when a spec task is marked complete.
 - **MCP.** Used the fetch server to verify assumptions against primary sources.
-  It respects robots.txt (so an EIA `/archive/` page was refused — an honest
+  It respects robots.txt (so an EIA `/archive/` page was refused, an honest
   finding), and the current EIA page gave the natural-gas factor **52.91
-  kg CO2/MMBtu** (→ 0.1805 kg/kWh), which corrected the config.
+  kg CO2/MMBtu** (0.1805 kg/kWh), which corrected the config.
 - **Property-based testing (hypothesis).** Each property ties to a requirement.
   It caught a real **band-ordering bug** (expected > upper90 on ~6k rows from a
   one-sided conformal quantile) that a hand-picked unit test would likely have

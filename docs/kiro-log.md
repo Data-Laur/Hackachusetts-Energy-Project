@@ -600,3 +600,23 @@ Edited `src/report.py` and regenerated `docs/index.html`.
 
 Verified: report JSON parses (38 rows), no "Triage" left, property tests 11/11,
 ingester sample run OK.
+
+
+## Entry — Render Starter plan + remove em dashes
+
+1. **render.yaml:** changed `plan: free` -> `plan: starter`; updated the header
+   comment to note Starter and that the file is a reference (deploy is via
+   Render's "New Web Service" form). (No free-tier sleeping note existed in the
+   README, so nothing to remove there.)
+2. **Removed all em dashes from user-facing text** and the files that generate it:
+   `src/report.py` (report HTML, JS placeholders, the CSV export comment line,
+   chart/section copy), `app.py` (upload page title + copy), `README.md`,
+   `docs/what-we-cant-see.md`. Replaced with commas, colons, or periods as reads
+   naturally. Also cleaned em dashes from code docstrings/comments that ship in
+   `docs/index.html`. Verified: 0 em dashes across all those files.
+   Added a steering rule to `.kiro/steering/heat-check-rules.md`: "Never use em
+   dashes in user-facing text."
+   Note: left en dashes in numeric ranges (e.g. "tasks 1-4", "Oct-Apr") since the
+   request was specifically about em dashes.
+
+Regenerated the report; property tests 11/11; ingester sample run OK.
