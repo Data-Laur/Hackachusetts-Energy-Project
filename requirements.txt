@@ -7,6 +7,11 @@ plotly==5.24.1
 # Offline reverse geocoding for city label + climate classification
 reverse_geocoder==1.5.1
 
+# Self-hosting web app (upload flow)
+fastapi==0.115.5
+uvicorn==0.32.1
+python-multipart==0.0.17
+
 # Testing (property-based tests)
 pytest==9.1.1
 hypothesis==6.170.9

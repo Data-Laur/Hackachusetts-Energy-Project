@@ -524,3 +524,50 @@ no sideways scrolling at any width.
 - **Logo:** enlarged to 34px in the top bar.
 - Output escaping (esc/attr) added for safety. Still 3.3 MB, Plotly via CDN.
   CI simulation + property tests still pass (11/11).
+
+
+## Entry — UI polish + self-hosting app (FastAPI + Docker + Render)
+
+### 0. UI polish (report)
+- Filter selects: native `<select>` with `appearance:none` and a custom ~14px
+  teal chevron (inline SVG) with 12px right padding so the arrow isn't cramped.
+- "Columns" button renamed to **"Customize columns (X of Y)"** with a live count,
+  styled as an outlined button (teal border/text, white fill) with a small
+  sliders icon; checked boxes use the brand teal (`accent-color`).
+
+### Self-hosting app (timeboxed)
+- `app.py` (FastAPI):
+  - `GET /` serves the precomputed `docs/index.html` (no pipeline on the server).
+  - `GET /upload` branded upload form + Download sample A/B/C buttons.
+  - `POST /upload` accepts one `.csv` (<= 5 MB, .csv only), runs the existing
+    `src/ingest.py` logic in a **temp folder**, shows the mapping report (or the
+    ambiguous STOP) and the scored table incl. city/climate and what "scored"
+    means, then deletes the temp files.
+  - `GET /samples/{name}`, `GET /assets/{name}`, `GET /healthz`.
+  - Refactored `ingest.process/score/write_mapping_report` to take an `out_dir`
+    (default "inbox") so the server writes into an isolated temp dir; `process`
+    now returns a structured dict (status/ambiguous/summary/report_md).
+- `Dockerfile` (python:3.12-slim): installs requirements, copies app + src/ +
+  docs/ + samples/, runs `uvicorn app:app --host 0.0.0.0 --port $PORT`.
+  `.dockerignore` keeps data/venv/git out of the image.
+- `render.yaml`: Render free-tier web service, Docker runtime, health check
+  `/healthz`, autoDeploy on.
+- Report nav: added **"Upload your data ↗"** linking to `__UPLOAD_URL__`
+  (defaults to `/upload`; set `HEATCHECK_UPLOAD_URL` to the hosted URL before
+  regenerating the GitHub Pages copy).
+- CI: added a `docker` job that builds the image and smoke-tests `/healthz` and
+  `/upload` inside the running container, so CI fails if the container breaks.
+
+### Testing
+- Could not build the Docker image locally (Docker not installed on this
+  machine) — flagged; the CI docker job is the real build check.
+- Verified the app two ways locally: FastAPI TestClient and a real uvicorn server
+  on port 8111. `/`, `/upload`, `/healthz`, sample downloads all 200; upload of
+  sample A returns a scored table labeled "Austin, Texas / warm"; upload of
+  sample C returns the "We need your input" ambiguous stop; a `.txt` upload is
+  rejected with 400. Property tests 11/11.
+
+### Run locally
+    pip install -r requirements.txt
+    uvicorn app:app --reload --port 8000
+    # open http://127.0.0.1:8000/  (report)  and  /upload  (upload flow)

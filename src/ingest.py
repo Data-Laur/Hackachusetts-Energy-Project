@@ -233,9 +233,9 @@ def to_long_kwh(df, mapping, path):
     return out
 
 
-def write_mapping_report(path, mapping, extra=None):
-    """Write inbox/mapping_report.md describing what we found."""
-    os.makedirs("inbox", exist_ok=True)
+def write_mapping_report(path, mapping, extra=None, out_dir="inbox"):
+    """Write <out_dir>/mapping_report.md describing what we found."""
+    os.makedirs(out_dir, exist_ok=True)
     name = os.path.basename(path)
     lines = [
         f"# Mapping report — {name}",
@@ -268,7 +268,7 @@ def write_mapping_report(path, mapping, extra=None):
         ]
     if extra:
         lines += ["", extra]
-    with open(os.path.join("inbox", "mapping_report.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(out_dir, "mapping_report.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
 
@@ -313,7 +313,7 @@ def _methods_for(hours, has_weather):
     return label, methods
 
 
-def score(long_df, path, has_weather=False, coords=None):
+def score(long_df, path, has_weather=False, coords=None, out_dir="inbox"):
     """
     Score the ingested buildings.
 
@@ -333,7 +333,7 @@ def score(long_df, path, has_weather=False, coords=None):
     run, and the report says so. To enable the temperature-dependent checks,
     supply a matching weather file (future extension); here has_weather=False.
     """
-    os.makedirs(os.path.join("inbox", "results"), exist_ok=True)
+    os.makedirs(os.path.join(out_dir, "results"), exist_ok=True)
     # Pattern checks use the same logic as the main pipeline.
     from waste_detect import setback_ratio, warm_day_heating
 
@@ -397,13 +397,18 @@ def score(long_df, path, has_weather=False, coords=None):
         })
     summary = pd.DataFrame(rows)
     name = os.path.splitext(os.path.basename(path))[0]
-    out_path = os.path.join("inbox", "results", f"{name}_scored.csv")
+    out_path = os.path.join(out_dir, "results", f"{name}_scored.csv")
     summary.to_csv(out_path, index=False)
     return out_path, summary
 
 
-def process(path):
-    """Full pipeline for one dropped file. Returns a status string."""
+def process(path, out_dir="inbox"):
+    """
+    Full pipeline for one dropped file. Writes a mapping report (and, when the
+    mapping is unambiguous, a scored CSV) under out_dir, and returns a dict:
+        {status, ambiguous, mapping_report_path, scored_path, summary, report_md}
+    status is a short human-readable line (kept for the CLI/hook).
+    """
     df = pd.read_csv(path)
     mapping = detect_and_map(df)
 
@@ -417,11 +422,16 @@ def process(path):
             mapping["reasons"].append(
                 f"Unit '{unit}' taken from the filename -> x{factor} to kWh.")
 
+    report_path = os.path.join(out_dir, "mapping_report.md")
     if mapping["ambiguous"]:
-        write_mapping_report(path, mapping,
-                             extra="**STOPPED.** Fix the ambiguity above, then "
-                                   "re-drop the file.")
-        return f"AMBIGUOUS: {os.path.basename(path)} — wrote inbox/mapping_report.md, stopped."
+        stop_md = ("**STOPPED.** Fix the ambiguity above, then re-drop the file.")
+        write_mapping_report(path, mapping, extra=stop_md, out_dir=out_dir)
+        report_md = open(report_path, encoding="utf-8").read()
+        return {
+            "status": f"AMBIGUOUS: {os.path.basename(path)} — needs your input, stopped.",
+            "ambiguous": True, "mapping_report_path": report_path,
+            "scored_path": None, "summary": None, "report_md": report_md,
+        }
 
     long_df = to_long_kwh(df, mapping, path)
     # If the file carried a temperature column, weather is available for the
@@ -429,7 +439,8 @@ def process(path):
     has_weather = bool(mapping.get("temp_col"))
     # Coordinates (if present) enable city labeling + climate classification.
     coords = _find_coords(df)
-    out_path, summary = score(long_df, path, has_weather=has_weather, coords=coords)
+    out_path, summary = score(long_df, path, has_weather=has_weather,
+                              coords=coords, out_dir=out_dir)
     labels = summary["scored_as"].value_counts().to_dict()
     label_lines = "\n".join(f"  - {k}: {v} building(s)" for k, v in labels.items())
     # Climate line (same for all buildings in a file).
@@ -481,8 +492,13 @@ def process(path):
         f"Per-building outcome:\n{label_lines}\n\n"
         f"{weather_note}{climate_note}"
     )
-    write_mapping_report(path, mapping, extra=result)
-    return f"OK: {os.path.basename(path)} — scored {len(summary)} buildings -> {out_path}"
+    write_mapping_report(path, mapping, extra=result, out_dir=out_dir)
+    report_md = open(report_path, encoding="utf-8").read()
+    return {
+        "status": f"OK: {os.path.basename(path)} — scored {len(summary)} buildings -> {out_path}",
+        "ambiguous": False, "mapping_report_path": report_path,
+        "scored_path": out_path, "summary": summary, "report_md": report_md,
+    }
 
 
 def _path_from_stdin():
@@ -523,7 +539,8 @@ def main():
     if not os.path.exists(path):
         print(f"File not found: {path}")
         sys.exit(1)
-    print(process(path))
+    result = process(path)
+    print(result["status"] if isinstance(result, dict) else result)
 
 
 if __name__ == "__main__":

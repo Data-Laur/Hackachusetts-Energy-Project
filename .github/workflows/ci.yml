@@ -41,3 +41,26 @@ jobs:
         # Data-driven properties skip cleanly when data/processed/ is absent (CI
         # has no Datasets/); the pure-function properties always run.
         run: python -m pytest tests/test_properties.py -q
+
+  docker:
+    # Build the container so CI fails if the image or app breaks.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Build the Docker image
+        run: docker build -t heat-check:ci .
+
+      - name: Smoke-test the container (/healthz and /upload)
+        run: |
+          set -e
+          docker run -d --name hc -e PORT=8000 -p 8000:8000 heat-check:ci
+          # Wait for the app to come up.
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/healthz >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8000/healthz
+          curl -fsS http://localhost:8000/upload >/dev/null
+          docker rm -f hc

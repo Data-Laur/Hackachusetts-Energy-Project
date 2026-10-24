@@ -129,9 +129,24 @@
   select, .btn { padding: .4rem .55rem; font: inherit; font-size: .9rem;
                  border: 1px solid var(--border); border-radius: 8px; background:#fff;
                  color: var(--body-text); }
+  /* Native select with a custom teal chevron (~14px) and room on the right. */
+  select { -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    padding-right: 32px;  /* 14px chevron + 12px gap + 6px */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230E9F8F' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat; background-position: right 12px center; }
   .btn { cursor: pointer; background: #0A7C6F; color: #fff; border-color: #0A7C6F;
          font-weight: 600; }  /* darkened teal so white label clears 4.5:1 */
   .btn:hover { background: #097063; }
+  /* Outlined variant: teal border + text on white, with a small sliders icon. */
+  .btn-outline { cursor: pointer; background: #fff; color: var(--teal-text);
+    border: 1px solid var(--teal); font: inherit; font-size: .9rem; font-weight: 600;
+    border-radius: 8px; padding: .4rem .7rem; display: inline-flex; align-items: center;
+    gap: .4rem; }
+  .btn-outline:hover { background: #F0FBF9; }
+  .btn-outline svg { flex-shrink: 0; }
+  /* Column checkbox list: checked boxes use the brand teal. */
+  .colpicker .menu input[type="checkbox"] { accent-color: var(--teal); width: 15px;
+    height: 15px; }
   details { margin-top: 1.5rem; border: 1px solid var(--border); border-radius: 10px;
             padding: .5rem 1rem; background: var(--card); }
   summary { cursor: pointer; font-weight: 600; padding: .3rem 0; color: var(--ink); }
@@ -174,6 +189,8 @@
       <button id="nav-method" onclick="show('method')">Method</button>
       <button id="nav-limits" onclick="show('limits')">What we can't see</button>
       <button id="nav-data" onclick="show('data')">Data</button>
+      <a id="nav-upload" href="/upload" style="display:block;text-decoration:none;">
+        <button type="button">Upload your data ↗</button></a>
     </nav>
     <main id="main"></main>
   </div>
@@ -312,7 +329,10 @@ function renderTriage(){
       </select></div>
     <div class="colpicker">
       <label>&nbsp;</label>
-      <button class="btn" aria-expanded="false" onclick="toggleColMenu(event)">Columns ▾</button>
+      <button class="btn-outline" aria-expanded="false" onclick="toggleColMenu(event)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="#fff"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="#fff"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="8" cy="18" r="2" fill="#fff"/></svg>
+        Customize columns (${active.length} of ${COLUMNS.length})
+      </button>
       <div class="menu" id="col-menu" hidden>
         ${COLUMNS.filter(cd=>!cd.always).map(cd=>`
           <label><input type="checkbox" ${cols.has(cd.key)?'checked':''}

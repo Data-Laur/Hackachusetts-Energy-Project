@@ -1,0 +1,13 @@
+# Render Blueprint for the Heat Check app (free tier, Docker).
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: heat-check
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8000"

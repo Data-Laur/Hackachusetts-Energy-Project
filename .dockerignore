@@ -1,0 +1,11 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+Datasets/
+data/
+inbox/
+outputs/
+.kiro/
+tests/
+*.pdf
