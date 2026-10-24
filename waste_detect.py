@@ -73,8 +73,17 @@ def exceedance_by_building(preds):
     grouped = tmp.groupby("building_id").agg(
         excess_kwh=("excess", "sum"),
         excess_hours=("is_excess", "sum"),
+        total_hours=("actual", "size"),
+        annual_steam_kwh=("actual", "sum"),
     )
-    return grouped.reset_index()
+    grouped = grouped.reset_index()
+    # Share of 2017 hours spent above the upper band (expect ~5% by chance).
+    grouped["exceed_share"] = grouped["excess_hours"] / grouped["total_hours"]
+    # Counted excess as a share of the building's own 2017 steam use.
+    grouped["excess_share"] = grouped["excess_kwh"] / grouped["annual_steam_kwh"].where(
+        grouped["annual_steam_kwh"] > 0, other=pd.NA
+    )
+    return grouped
 
 
 def level_shift_report(preds):
@@ -176,10 +185,16 @@ def setback_ratio(group):
 
 
 def warm_day_heating(group):
-    """Total steam (kWh) used during hours warmer than 18 °C outside."""
+    """
+    Steam used during hours warmer than 18 °C outside.
+    Returns (warm_day_kwh, warm_day_share) where the share is relative to the
+    building's total annual steam.
+    """
     g = group.dropna(subset=["steam", "airTemperature"])
-    warm = g[g["airTemperature"] > config.WARM_DAY_TEMP_C]
-    return float(warm["steam"].sum())
+    warm_kwh = float(g.loc[g["airTemperature"] > config.WARM_DAY_TEMP_C, "steam"].sum())
+    annual = float(g["steam"].sum())
+    share = (warm_kwh / annual) if annual > 0 else 0.0
+    return warm_kwh, share
 
 
 def pattern_metrics(clean):
@@ -187,11 +202,13 @@ def pattern_metrics(clean):
     good = clean[~clean["bad_data"]]
     rows = []
     for building_id, group in good.groupby("building_id"):
+        warm_kwh, warm_share = warm_day_heating(group)
         rows.append(
             {
                 "building_id": building_id,
                 "setback_ratio": setback_ratio(group),
-                "warm_day_kwh": warm_day_heating(group),
+                "warm_day_kwh": warm_kwh,
+                "warm_day_share": warm_share,
             }
         )
     return pd.DataFrame(rows)
@@ -231,8 +248,16 @@ def build_ranking(clean, preds, scores):
     # Worst quartile cutoffs (higher = worse for both metrics).
     setback_cut = pat["setback_ratio"].quantile(config.WORST_QUARTILE)
     warm_cut = pat["warm_day_kwh"].quantile(config.WORST_QUARTILE)
-    pat["flag_no_setback"] = pat["setback_ratio"] >= setback_cut
-    pat["flag_warm_day"] = pat["warm_day_kwh"] >= warm_cut
+    # A pattern flag needs BOTH: worst-quartile rank AND an absolute floor, so we
+    # don't flag a building just for being relatively worse on an efficient campus.
+    pat["flag_no_setback"] = (
+        (pat["setback_ratio"] >= setback_cut)
+        & (pat["setback_ratio"] >= config.SETBACK_RATIO_FLOOR)
+    )
+    pat["flag_warm_day"] = (
+        (pat["warm_day_kwh"] >= warm_cut)
+        & (pat["warm_day_share"] >= config.WARMDAY_MIN_ANNUAL_SHARE)
+    )
 
     # --- Merge the two methods on building_id ---
     out = pat.merge(exc, on="building_id", how="outer")
@@ -240,9 +265,20 @@ def build_ranking(clean, preds, scores):
     out["is_level_shift"] = out["is_level_shift"].fillna(False)
 
     def has_exceedance(r):
-        """True if a trustworthy model shows real excess that is NOT a level shift."""
-        return (r["trustworthy"] and pd.notna(r["excess_kwh"])
-                and r["excess_kwh"] > 0 and not r["is_level_shift"])
+        """
+        Confirmed exceedance: a trustworthy model (not a level shift) where BOTH
+        exceedance thresholds are met — more hours above the band than chance
+        would give, and a material amount of excess energy.
+        """
+        if not (r["trustworthy"] and not r["is_level_shift"]):
+            return False
+        if pd.isna(r["excess_kwh"]) or r["excess_kwh"] <= 0:
+            return False
+        enough_hours = (pd.notna(r.get("exceed_share"))
+                        and r["exceed_share"] > config.CONFIRMED_MIN_EXCEED_SHARE)
+        enough_energy = (pd.notna(r.get("excess_share"))
+                         and r["excess_share"] >= config.CONFIRMED_MIN_EXCESS_SHARE)
+        return bool(enough_hours and enough_energy)
 
     def has_pattern(r):
         return bool(r.get("flag_no_setback")) or bool(r.get("flag_warm_day"))

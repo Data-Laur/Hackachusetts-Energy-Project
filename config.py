@@ -92,6 +92,23 @@ OCCUPIED_END_HOUR = 18         # 18:00
 # Pattern flagging: a building is flagged if it lands in the worst quartile.
 WORST_QUARTILE = 0.75          # 75th percentile cutoff
 
+# --- "Confirmed waste" thresholds (both must be met) ---
+# By design ~5% of hours fall above the 90% upper band just by chance. We only
+# call it confirmed waste when exceedance is clearly MORE than that noise floor.
+CONFIRMED_MIN_EXCEED_SHARE = 0.10  # >10% of 2017 hours above the upper band
+# ...and the excess must be material relative to the building's own usage.
+# NOTE: excess is measured conservatively (only energy ABOVE the 90% upper band),
+# so even chronic over-users rarely clear a few % of annual steam. 1.5% is tuned
+# to that conservative measure — it confirms clear chronic exceeders without
+# flagging trivial ones.
+CONFIRMED_MIN_EXCESS_SHARE = 0.015  # counted excess >= 1.5% of 2017 steam use
+
+# --- "Worth a look" pattern floors (worst quartile AND an absolute floor) ---
+# A worst-quartile rank alone isn't enough; the behavior must be real in
+# absolute terms, not just relatively worse than a very efficient campus.
+SETBACK_RATIO_FLOOR = 0.70     # night/weekend use >= 70% of occupied use
+WARMDAY_MIN_ANNUAL_SHARE = 0.05  # warm-day steam >= 5% of the building's annual steam
+
 # Level-shift check. If a building's exceedance is spread fairly evenly across
 # the year and the day, that looks like it simply used MORE steam all the time in
 # 2017 than 2016 (a baseline shift), rather than a specific wasteful behavior. We

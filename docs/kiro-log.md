@@ -116,3 +116,40 @@ counts what clears the band). Five tiers:
 New top waster unchanged (Hog_education_Caridad, ~1,063,585 kWh counted excess ≈
 $66,474, 239,307 kg CO2). Cathleen/Haywood dropped out of the top 10 as level
 shifts.
+
+## Entry — Verdict thresholds, limitations, download script, repo checks
+
+### Verdict thresholds (now credible — all 5 tiers populated)
+- **Confirmed waste** requires BOTH (in config.py):
+  - `CONFIRMED_MIN_EXCEED_SHARE = 0.10` — >10% of 2017 hours above the upper band
+    (vs ~5% expected by chance), AND
+  - `CONFIRMED_MIN_EXCESS_SHARE = 0.015` — counted excess ≥ 1.5% of 2017 steam.
+    (Set to 1.5% not 5% because excess is measured conservatively as
+    actual − upper90, so even chronic over-users rarely clear 5% of annual kWh.
+    An in-data distribution check showed only 1 building clears 5% but 12 clear
+    the >10%-of-hours bar; 1.5% confirms the clear chronic exceeders.)
+- **Worth a look** (pattern): worst quartile AND an absolute floor (in config.py):
+  - `SETBACK_RATIO_FLOOR = 0.70` (night/weekend ≥ 70% of occupied at similar temp), or
+  - `WARMDAY_MIN_ANNUAL_SHARE = 0.05` (warm-day steam ≥ 5% of annual steam).
+- Everything else trustworthy = **Within expected range**.
+
+Counts per tier: Confirmed waste 10, Worth a look 28, Within expected range 8,
+Changed since 2016 7, Can't judge 25.
+
+Top waster unchanged: Hog_education_Caridad — 1,063,585 kWh excess ≈ $66,474,
+239,307 kg CO2 (Confirmed waste).
+
+### "What we can't see" notes
+Added docs/what-we-cant-see.md. Two new points per request: (1) 2017 coverage
+80.7% vs 89.5% in-distribution = real year-over-year drift; (2) the level-shift
+rule (8+ months) can miss changes that started partway through 2017.
+
+### Repo requirements (hackathon rules)
+- `scripts/download_data.py` added: downloads metadata.csv, steam_cleaned.csv,
+  weather.csv from the BDG2 LFS media host into Datasets/. Verified working
+  (urllib → curl fallback handles the macOS SSL cert issue). Skips files that
+  already exist.
+- `.kiro/` confirmed at repo root, NOT gitignored (git check-ignore exits 1),
+  and tracked in HEAD (specs + steering), already pushed.
+- Repo is **public**: https://github.com/Data-Laur/Hackachusetts-Energy-Project
+  (HTTP 200 unauthenticated).
