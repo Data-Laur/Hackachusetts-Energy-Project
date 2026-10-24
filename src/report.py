@@ -565,7 +565,8 @@ function renderData(){
     Data Genome Project 2, energy meter data from the ASHRAE Great Energy Predictor III
     competition. <em>Sci Data</em> 7, 368 (2020).
     <a href="https://doi.org/10.1038/s41597-020-00712-x">doi.org/10.1038/s41597-020-00712-x</a></p>
-    <p>Scope: site "Hog", steam meters only, 2016–2017. Steam in kWh, temperature in °C.</p>`;
+    <p>Scope: site Hog, steam meters only. Models trained on 2016; all results
+    shown are for 2017. Steam in kWh, temperature in C.</p>`;
 }
 renderTriage();
 </script>

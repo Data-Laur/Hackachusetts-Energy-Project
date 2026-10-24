@@ -149,9 +149,18 @@ def model_one_building(building_df):
     test_scale = np.maximum(expected, NORMALIZE_FLOOR)
     lower = expected + lo_q * test_scale  # lo_q is negative -> lowers the bound
     upper = expected + hi_q * test_scale
-    # Steam can't be negative, so clip the lower bound at 0.
-    lower = np.clip(lower, 0, None)
+
+    # Steam can't be negative, so clip the point prediction at 0 first.
     expected = np.clip(expected, 0, None)
+    # A valid band must ALWAYS bracket the point prediction:
+    #     lower <= expected <= upper.
+    # The conformal quantiles can be one-signed (e.g. a building that usually
+    # overpredicts gives a negative upper quantile), which could otherwise push
+    # the upper bound below the prediction. Enforce the ordering explicitly, and
+    # clip the lower bound at 0 (steam can't be negative).
+    lower = np.minimum(lower, expected)
+    upper = np.maximum(upper, expected)
+    lower = np.clip(lower, 0, None)
 
     predictions = pd.DataFrame(
         {

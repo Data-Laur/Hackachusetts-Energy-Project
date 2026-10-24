@@ -61,19 +61,19 @@ tasks (5–7) until the MVP works and is pushed to GitHub.
 
 ## Stretch (only after MVP is pushed)
 
-- [ ] 5. Kiro chat copilot rules
-  - [ ] 5.1 Create `.kiro/steering/copilot.md`: when asked about results, answer
-    ONLY from `outputs/` files or by running `src/` functions; never invent
-    numbers; always state the 90% range and model trust level; refuse with a
-    reason for any "Can't judge" building.
-  - _How to run:_ ask Kiro "which 5 buildings waste the most?" and confirm the
-    answer cites the outputs and includes ranges + trust levels.
+- [x] 5. Kiro chat copilot rules
+  - [x] 5.1 Create `.kiro/steering/copilot.md` (manual inclusion): when asked
+    about results, answer ONLY from `data/processed/`, `docs/`, or by running
+    `src/` functions; never invent numbers; always state verdict tier, trust
+    status (CV(RMSE)), and the conservative-excess note; refuse with a reason for
+    any "Can't judge" building and say what data would fix it.
+  - _How to run:_ ask Kiro (with #copilot) "which 5 buildings waste the most?"
+    and confirm the answer cites the outputs and includes trust levels.
   - _Requirements: 5_
 
-- [ ] 6. Demo questions
-  - [ ] 6.1 Create `demo/questions.md` with 8 test questions and their correct
-    answers taken from the `outputs/` files, each numeric answer carrying its 90%
-    range and trust level.
+- [x] 6. Demo questions
+  - [x] 6.1 Create `demo/questions.md` with 8 test questions and their correct
+    answers taken from the outputs (2+ refusals, 1 "Changed since 2016").
   - _Requirements: 6_
 
 - [ ] 7. README

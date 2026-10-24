@@ -188,3 +188,52 @@ and compact time labels (Plotly stays on the CDN, not in the file).
 gh CLI not installed on this machine, so Pages must be enabled via the web UI
 (Settings -> Pages -> Source: Deploy from a branch -> main / docs).
 Expected URL: https://data-laur.github.io/Hackachusetts-Energy-Project/
+
+## Entry — Report fix, Kiro copilot, property-based testing
+
+### 1. Report Data-section scope line
+Changed to: "Scope: site Hog, steam meters only. Models trained on 2016; all
+results shown are for 2017. Steam in kWh, temperature in C." Regenerated
+docs/index.html via `python src/report.py` (one command).
+Kiro feature: inline edit + single-command regeneration.
+
+### 2. Kiro copilot (steering)
+Created `.kiro/steering/copilot.md` with **inclusion: manual**. Rationale: these
+rules govern how I ANSWER result questions, which is irrelevant to unrelated
+coding on the repo; forcing them into every turn would constrain normal help and
+waste context. Manual lets you pull them in with #copilot exactly when wanted.
+(fileMatch rejected: questions are asked in chat, not tied to opening a file.)
+Rules: answer only from data/processed/, docs/, or src/ functions; never invent
+numbers; always give verdict tier + trust status (CV(RMSE)) + the conservative-
+excess note; refuse "Can't judge" with a reason and the data that would fix it.
+
+Created `demo/questions.md` with 8 Q&A from the outputs, including 2 refusals
+(Q4 Hog_office_Terry = Can't judge, CV(RMSE) 52%; Q6 a 2019 gas price we don't
+have) and 1 "Changed since 2016" (Q5 Hog_education_Haywood, excess across 8
+months -> counted excess 0, excluded from totals).
+Kiro feature: steering file (manual inclusion).
+
+### 3. Property-based testing (hypothesis)
+Added `tests/test_properties.py` (pytest + hypothesis), each property tied to a
+requirement:
+- Req 2: lower90 <= expected <= upper90 for every row.
+- Req 3: per-hour excess >= 0 and = 0 when actual <= upper band.
+- Req 3/4: exactly one verdict tier per building, from the known set.
+- Req 3: "Changed since 2016" and "Can't judge" contribute 0 to waste totals.
+- Req 3: warm_day_share in [0,1]; setback_ratio >= 0 (NOT bounded by 1 — a
+  building with no setback can use MORE at night; documented, not asserted).
+- Req 3: money_and_co2 is linear, non-negative, and round-trips kWh<->$<->CO2.
+
+**PBT caught a real bug a unit test would likely have missed:**
+`test_band_ordering` failed — 5,990 rows across 37 buildings had
+`expected > upper90`. Root cause: the two-sided seasonal conformal upper quantile
+can be negative for buildings that systematically overpredict, and we clipped
+`expected`/`lower` at 0 but never enforced that the band brackets the point
+prediction. A hand-written unit test on one or two sample rows would almost
+certainly have picked "normal" rows and passed; hypothesis-style checking over
+ALL rows surfaced the near-zero-prediction edge case. Fix in baseline_model.py:
+after clipping expected at 0, enforce lower <= expected <= upper explicitly.
+Totals barely moved (confirmed-waste 2,554,579 -> 2,551,077 kWh, 0.14%),
+confirming it was an edge-case band bug, not a logic error in exceedance.
+All 9 properties pass after the fix. Regenerated predictions, ranking, and report.
+Kiro feature: test authoring + run-and-diagnose loop.
