@@ -13,3 +13,13 @@ __pycache__/
 
 # Streamlit secrets
 .streamlit/secrets.toml
+
+# Data (do not commit — see Building Data Genome Project 2)
+data/
+Datasets/
+
+# Pipeline outputs
+data/processed/
+
+# Generated report
+outputs/
