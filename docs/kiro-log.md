@@ -671,3 +671,25 @@ Edited `src/report.py`, regenerated `docs/index.html`.
    Docker image lean).
 
 Property tests 11/11; ingester sample run OK.
+
+
+## Entry — "What we can't see" renders as real HTML
+
+The limitations section was dumping raw Markdown into a `<pre>` (literal `**`,
+`- `, and hard mid-sentence line breaks). Fixed:
+
+- Added a small dependency-free `md_to_html()` in `src/report.py` (handles
+  `##`/`###` headings, paragraphs, `**bold**`, `` `code` ``, and `-` lists;
+  joins hard-wrapped lines within a paragraph with a space). `load_limitations()`
+  now returns rendered HTML, injected into a `.prose` div instead of `<pre>`.
+  (No new dependency; keeps CI + the Docker image lean.)
+- Rewrote `docs/what-we-cant-see.md`: each limitation is now its own `##`
+  heading (e.g. "Year-over-year drift limits accuracy") with the explanation as
+  a single unwrapped paragraph underneath. Removed hard line breaks mid-sentence.
+- Added `.prose` styling (headings, paragraph spacing, 70ch measure).
+- **Method** and **Data** were already hand-written HTML (proper `<p>`, `<ol>`,
+  `<strong>`, `<h3>`), so they had no raw-markdown problem; left as-is.
+
+Headless check (Playwright) of the Limits view at 1280 and 390: 7 `<h3>` + 8
+`<p>`, no literal `**`, no literal `- ` bullets, no page overflow. Property tests
+11/11; ingester sample run OK. Report regenerated with the Render upload link.

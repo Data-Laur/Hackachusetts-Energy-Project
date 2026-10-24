@@ -170,15 +170,69 @@ def other_reason(verdict, row):
 
 
 def load_limitations():
-    """Read docs/what-we-cant-see.md and return it as text (without the H1)."""
+    """Read docs/what-we-cant-see.md and return it as rendered HTML (no H1)."""
     path = os.path.join("docs", "what-we-cant-see.md")
     if not os.path.exists(path):
-        return "See docs/what-we-cant-see.md."
+        return "<p>See docs/what-we-cant-see.md.</p>"
     with open(path, encoding="utf-8") as f:
-        lines = f.readlines()
-    # Drop the first markdown H1 title; keep the rest.
-    body = [ln for ln in lines if not ln.startswith("# ")]
-    return "".join(body).strip()
+        text = f.read()
+    # Drop the first H1 title (the page already has its own <h2>).
+    lines = [ln for ln in text.splitlines() if not ln.startswith("# ")]
+    return md_to_html("\n".join(lines))
+
+
+def md_to_html(md):
+    """
+    Small, dependency-free Markdown to HTML converter for our docs. Handles:
+    ## / ### headings, paragraphs, - bullet lists, **bold**, and `code`.
+    Blank lines separate blocks; lines within a paragraph are joined with a
+    space so hard-wrapped source flows naturally.
+    """
+    import html as _html
+    import re as _re
+
+    def inline(s):
+        s = _html.escape(s)
+        s = _re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+        s = _re.sub(r"`(.+?)`", r"<code>\1</code>", s)
+        return s
+
+    html_parts, para, in_list = [], [], False
+
+    def flush_para():
+        nonlocal para
+        if para:
+            html_parts.append("<p>" + inline(" ".join(para)) + "</p>")
+            para = []
+
+    def close_list():
+        nonlocal in_list
+        if in_list:
+            html_parts.append("</ul>")
+            in_list = False
+
+    for raw in md.splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            flush_para(); close_list(); continue
+        if line.startswith("### "):
+            flush_para(); close_list()
+            html_parts.append("<h3>" + inline(line[4:].strip()) + "</h3>")
+        elif line.startswith("## "):
+            flush_para(); close_list()
+            html_parts.append("<h3>" + inline(line[3:].strip()) + "</h3>")
+        elif line.lstrip().startswith("- "):
+            flush_para()
+            if not in_list:
+                html_parts.append("<ul>"); in_list = True
+            html_parts.append("<li>" + inline(line.lstrip()[2:].strip()) + "</li>")
+        else:
+            if in_list:  # a continuation line inside a list item
+                html_parts[-1] = html_parts[-1][:-5] + " " + inline(line.strip()) + "</li>"
+            else:
+                para.append(line.strip())
+    flush_para(); close_list()
+    return "\n".join(html_parts)
 
 
 def build_payload():
@@ -504,6 +558,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .meta-line { color: var(--muted); margin: .25rem 0 1rem; }
   pre.notes { white-space: pre-wrap; background: var(--card); padding: 1rem;
               border-radius: 10px; border: 1px solid var(--border); font-family: inherit; }
+  /* Rendered prose for doc-driven sections (e.g. "What we can't see"). */
+  .prose { max-width: 70ch; }
+  .prose h3 { margin: 1.3rem 0 .35rem; }
+  .prose p { margin: 0 0 .5rem; }
+  .prose strong { color: var(--ink); }
   .back { margin-bottom: 1rem; }
   .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 
@@ -969,7 +1028,8 @@ function renderMethod(){
 }
 function renderLimits(){
   document.getElementById("main").innerHTML =
-    `<h2>What we can't see</h2><pre class="notes">${DATA.limitations.replace(/</g,'&lt;')}</pre>`;
+    `<p class="eyebrow">Limitations</p><h2>What we can't see</h2>
+     <div class="prose">${DATA.limitations}</div>`;
 }
 function renderData(){
   document.getElementById("main").innerHTML = `
