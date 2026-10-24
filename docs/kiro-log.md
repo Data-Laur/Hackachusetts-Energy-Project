@@ -641,3 +641,33 @@ caught this before pointing anything at the wrong URL).
      MMBtu->kWh conversion applied
    - POST sample C -> HTTP 200, "We need your input" ambiguous stop, no scored
      table (correctly refused on the unit-less "Usage" column)
+
+
+## Entry — Priorities table responsive fixes (mid-width overflow)
+
+Edited `src/report.py`, regenerated `docs/index.html`.
+
+1. **Building name:** now shows only the leaf (e.g. "Caridad") in bold via a new
+   `leafName()` (splits on "_" and takes the last part), with the type
+   ("Education") underneath. Applied in the table, stacked cards, and the
+   "don't rank" list. Cells wrap between words only (never mid-word).
+2. **Badges + tags never overflow:** removed `white-space:nowrap`; they now wrap
+   onto multiple lines inside the cell (`white-space:normal; overflow-wrap:
+   break-word; max-width:100%`), with slightly tighter padding.
+3. **Responsive columns:** switched the table to `table-layout:auto` with
+   per-column `min-width`s (via `col-<key>` classes on both th and td). Below
+   ~1300px the optional/wide columns (CV(RMSE), Type, kg CO2, Excess kWh, plus
+   method/full-fix) auto-hide even if selected, and a note shows: "Some columns
+   are hidden at this screen width." Stacked-card breakpoint moved from 900px to
+   1100px (stacked cards still show every selected field).
+4. **Headless verification (Playwright + chromium)** at 1440 / 1280 / 1024 / 390
+   (and a spot check at 1200). Checked: no horizontal page overflow, no cell
+   whose content is wider than the cell, no adjacent-cell overlap in the data
+   row, and the building name has no underscore. Result: ALL CLEAN.
+   - 1440: table, all columns, no note.
+   - 1280: table, optional columns hidden, note shown.
+   - 1024 + 390: stacked cards.
+   Playwright is a dev-only check; NOT added to requirements.txt (keeps CI + the
+   Docker image lean).
+
+Property tests 11/11; ingester sample run OK.

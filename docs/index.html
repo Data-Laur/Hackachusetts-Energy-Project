@@ -80,11 +80,24 @@
                 line-height: 1.35; }
 
   .table-wrap { width: 100%; max-width: 100%; }
-  table { border-collapse: collapse; width: 100%; table-layout: fixed;
+  table { border-collapse: collapse; width: 100%; table-layout: auto;
           font-size: 1rem; font-variant-numeric: tabular-nums; }
   th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--border);
            vertical-align: top; overflow-wrap: break-word; word-break: normal;
            hyphens: none; }  /* wrap between words, never mid-word */
+  /* Sensible per-column minimum widths so content wraps instead of overflowing. */
+  .col-priority { min-width: 68px; width: 72px; }
+  .col-building { min-width: 120px; }
+  .col-verdict  { min-width: 120px; }
+  .col-why      { min-width: 130px; }
+  .col-fix      { min-width: 130px; }
+  .col-dollars  { min-width: 84px; }
+  .col-type     { min-width: 100px; }
+  .col-kwh      { min-width: 96px; }
+  .col-co2      { min-width: 96px; }
+  .col-cvrmse   { min-width: 84px; }
+  .col-method   { min-width: 150px; }
+  .col-fixfull  { min-width: 180px; }
   /* Right-align numeric columns for dense, readable figures. */
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   th { background: #EAF0F6; color: var(--ink);
@@ -109,11 +122,11 @@
     font-size: .88rem; color: var(--body-text); padding: .2rem 0; cursor: pointer; }
   .colpicker .menu[hidden] { display: none; }
 
-  /* Short "why flagged" tags. */
-  .tags { display: flex; flex-wrap: wrap; gap: .25rem; }
-  .tag { display: inline-block; background: #EEF2F7; color: var(--ink);
+  /* Short "why flagged" tags. Wrap onto multiple lines inside the cell. */
+  .tags { display: flex; flex-wrap: wrap; gap: .25rem; max-width: 100%; }
+  .tag { display: inline-block; max-width: 100%; background: #EEF2F7; color: var(--ink);
     border: 1px solid var(--border); border-radius: 6px; padding: .1rem .45rem;
-    font-size: 1rem; white-space: nowrap; }
+    font-size: 1rem; line-height: 1.25; white-space: normal; overflow-wrap: break-word; }
 
   /* Stacked card view (used below 900px). Hidden by default. */
   .stack { display: none; }
@@ -129,8 +142,9 @@
   /* Badges: small text, so backgrounds use slightly darker shades of the brand
      hues so WHITE text clears 4.5:1 (amber keeps dark text). The palette's base
      hues are still used for larger elements (buttons, charts, accents). */
-  .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px;
-           font-size: 1rem; font-weight: 600; color: #fff; white-space: nowrap; }
+  .badge { display: inline-block; max-width: 100%; padding: .15rem .55rem;
+           border-radius: 12px; font-size: 1rem; font-weight: 600; color: #fff;
+           line-height: 1.25; white-space: normal; overflow-wrap: break-word; }
   .b-confirmed { background: #C7461F; }  /* ember, darkened: 4.86:1 */
   .b-worth { background: var(--amber); color: #3a2b00; }   /* dark text on amber: 6.85:1 */
   .b-within { background: #5F6D7D; }     /* gray, darkened: 5.29:1 */
@@ -175,10 +189,24 @@
   .back { margin-bottom: 1rem; }
   .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 
-  /* Below 900px: swap the table for stacked cards (no sideways scroll). */
-  @media (max-width: 900px) {
+  /* The "some columns hidden" note only appears in the narrow-table range. */
+  .cols-hidden-note { display: none; color: var(--muted); font-size: 1rem;
+    margin: -.25rem 0 .75rem; }
+
+  /* Below ~1300px: auto-hide the optional/wide columns even if selected, so the
+     remaining columns have room and nothing overflows. Both the header and its
+     cells carry the same col-* class, so they hide together and stay aligned. */
+  @media (max-width: 1300px) {
+    .col-cvrmse, .col-type, .col-co2, .col-kwh, .col-method, .col-fixfull { display: none; }
+    .cols-hidden-note { display: block; }
+  }
+
+  /* Below ~1100px: swap the table for stacked cards (no sideways scroll). The
+     stacked cards show every selected field, so nothing is lost there. */
+  @media (max-width: 1100px) {
     .table-wrap { display: none; }
     .stack { display: block; }
+    .cols-hidden-note { display: none; }
   }
 
   /* Phone layout: nav becomes a top bar, hide the tagline so the header fits. */
@@ -226,6 +254,11 @@ function attr(s){ return esc(s).replace(/'/g,'&#39;'); }
 
 // Drop the "Hog_" site prefix from building names (site is already stated).
 function shortName(id){ return String(id).replace(/^Hog_/, ''); }
+// Just the final name part, e.g. "Hog_education_Caridad" -> "Caridad".
+function leafName(id){
+  const parts = String(id).split('_');
+  return parts[parts.length - 1] || String(id);
+}
 
 // Short "why flagged" tags from the flagged_by string.
 function whyTags(r){
@@ -261,7 +294,7 @@ const COLUMNS = [
 function sortVal(r, key){
   switch(key){
     case 'priority': return r._priority;
-    case 'building': return shortName(r.id).toLowerCase();
+    case 'building': return leafName(r.id).toLowerCase();
     case 'verdict':  return VERDICT_ORDER[r.verdict] ?? 99;
     case 'why':      return whyTags(r).join(', ').toLowerCase();
     case 'fix':      return shortFix(r.fix).toLowerCase();
@@ -279,7 +312,7 @@ function sortVal(r, key){
 function rawVal(r, key){
   switch(key){
     case 'priority': return r._priority;
-    case 'building': return shortName(r.id);
+    case 'building': return leafName(r.id);
     case 'verdict':  return r.verdict;
     case 'why':      return whyTags(r).join('; ');
     case 'fix':      return shortFix(r.fix);
@@ -317,7 +350,7 @@ function colSet(){ if(!state.cols) state.cols = loadCols(); return state.cols; }
 function cellHTML(r, key){
   switch(key){
     case 'priority': return r._priority;
-    case 'building': return `<span class="bname">${esc(shortName(r.id))}</span>`
+    case 'building': return `<span class="bname">${esc(leafName(r.id))}</span>`
                           + `<span class="btype">${esc(r.type)}</span>`;
     case 'verdict':  return badge(r.verdict);
     case 'why':      return `<span class="tags">${whyTags(r).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</span>`;
@@ -430,15 +463,17 @@ function renderPriorities(){
     </div>
   </div>
 
+  <p class="cols-hidden-note">Some columns are hidden at this screen width. Widen
+  the window, or see the full detail on each building's page.</p>
   <div class="table-wrap">
     <table>
       <thead><tr>
-        ${active.map(cd=>`<th scope="col" class="th-sort ${cd.num?'num':''}" ${state.sortKey===cd.key?'aria-sort="'+(state.sortDir===1?'ascending':'descending')+'"':''} onclick="sortBy('${cd.key}')">${esc(cd.label)}${sortArrow(cd.key)}</th>`).join('')}
+        ${active.map(cd=>`<th scope="col" class="th-sort col-${cd.key} ${cd.num?'num':''}" ${state.sortKey===cd.key?'aria-sort="'+(state.sortDir===1?'ascending':'descending')+'"':''} onclick="sortBy('${cd.key}')">${esc(cd.label)}${sortArrow(cd.key)}</th>`).join('')}
       </tr></thead>
       <tbody>
       ${rows.map(r=>`
         <tr tabindex="0" role="button" onclick="openBuilding('${attr(r.id)}')" onkeydown="if(event.key==='Enter')openBuilding('${attr(r.id)}')">
-          ${active.map(cd=>`<td class="${cd.num?'num':''}">${cellHTML(r, cd.key)}</td>`).join('')}
+          ${active.map(cd=>`<td class="col-${cd.key} ${cd.num?'num':''}">${cellHTML(r, cd.key)}</td>`).join('')}
         </tr>`).join('')}
       </tbody>
     </table>
@@ -449,7 +484,7 @@ function renderPriorities(){
     ${rows.length===0?'<p>No buildings match these filters.</p>':''}
     ${rows.map(r=>`
       <div class="srow" tabindex="0" role="button" onclick="openBuilding('${attr(r.id)}')" onkeydown="if(event.key==='Enter')openBuilding('${attr(r.id)}')">
-        <div class="sname"><span class="bname">${esc(shortName(r.id))}</span> ${badge(r.verdict)}</div>
+        <div class="sname"><span class="bname">${esc(leafName(r.id))}</span> ${badge(r.verdict)}</div>
         <div class="btype" style="margin-bottom:.3rem">${esc(r.type)}</div>
         ${active.filter(cd=>cd.key!=='building'&&cd.key!=='verdict').map(cd=>`
           <div class="sline"><span class="k">${esc(cd.label)}</span><span>${cellHTML(r, cd.key)}</span></div>`).join('')}
@@ -462,14 +497,14 @@ function renderPriorities(){
       <table>
         <thead><tr><th scope="col">Building</th><th scope="col">Type</th><th scope="col">Verdict</th><th scope="col">Reason</th></tr></thead>
         <tbody>
-        ${DATA.others.map(o=>`<tr><td>${esc(shortName(o.id))}</td><td>${esc(o.type)}</td><td>${badge(o.verdict)}</td><td>${esc(o.reason)}</td></tr>`).join('')}
+        ${DATA.others.map(o=>`<tr><td><span class="bname">${esc(leafName(o.id))}</span><span class="btype">${esc(o.type)}</span></td><td>${esc(o.type)}</td><td>${badge(o.verdict)}</td><td>${esc(o.reason)}</td></tr>`).join('')}
         </tbody>
       </table>
     </div>
     <div class="stack">
       ${DATA.others.map(o=>`
         <div class="srow">
-          <div class="sname">${esc(shortName(o.id))} ${badge(o.verdict)}</div>
+          <div class="sname"><span class="bname">${esc(leafName(o.id))}</span> ${badge(o.verdict)}</div>
           <div class="sline"><span class="k">Type</span><span>${esc(o.type)}</span></div>
           <div class="sline"><span class="k">Reason</span><span>${esc(o.reason)}</span></div>
         </div>`).join('')}
