@@ -643,7 +643,8 @@ function whyTags(r){
   const f = (r.flagged_by||'').toLowerCase();
   const tags = [];
   if(f.includes('exceedance')) tags.push('Above expected');
-  if(f.includes('warm day') || f.includes('warm-day')) tags.push('Warm-day heating');
+  // \u2011 = non-breaking hyphen so "Warm-day" never splits at the hyphen.
+  if(f.includes('warm day') || f.includes('warm-day')) tags.push('Warm\u2011day heating');
   if(f.includes('setback')) tags.push('No setback');
   if(f.includes('level shift')) tags.push('Level shift');
   if(!tags.length) tags.push('-');

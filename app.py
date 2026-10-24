@@ -48,9 +48,15 @@ PAGE_HEAD = """<!DOCTYPE html><html lang="en"><head>
         --mist:#F4F7FA;--card:#fff;--border:#DCE3EA;--body:#1f2a37;--muted:#51607a;}
   *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;
     background:var(--mist);color:var(--body);line-height:1.5}
-  header{display:flex;align-items:center;gap:.6rem;background:var(--ink);color:#fff;padding:.7rem 1.25rem}
+  header{display:flex;align-items:center;gap:.6rem;background:var(--ink);color:#fff;
+    padding:.7rem 1.25rem;flex-wrap:wrap}
   header img{width:34px;height:34px} header .wordmark{font-weight:700;font-size:1.15rem}
   header .tagline{color:#AFC0D6;font-size:.8rem;margin-left:.5rem;padding-left:.5rem;border-left:1px solid #33496a}
+  header nav{display:flex;gap:.25rem;margin-left:auto}
+  header nav a{color:#D7E0EC;text-decoration:none;font-weight:600;font-size:1rem;
+    padding:.4rem .7rem;border-radius:8px}
+  header nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+  header nav a[aria-current="page"]{background:#0A7C6F;color:#fff}
   main{max-width:900px;margin:0 auto;padding:1.5rem}
   a{color:var(--teal-text)} h1,h2,h3{color:var(--ink)}
   .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:1rem}
@@ -59,6 +65,8 @@ PAGE_HEAD = """<!DOCTYPE html><html lang="en"><head>
   .btn:hover{background:#097063}
   .btn-outline{display:inline-block;background:#fff;color:var(--teal-text);border:1px solid var(--teal);
     border-radius:8px;padding:.5rem .9rem;font-weight:600;text-decoration:none;margin-right:.4rem}
+  .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:-.25rem 0 1rem}
+  .actions .btn-outline{margin-right:0}
   /* Table styled like the Priorities table: wrap between words, never mid-word. */
   .table-wrap{width:100%;max-width:100%}
   table{border-collapse:collapse;width:100%;font-size:1rem;font-variant-numeric:tabular-nums}
@@ -83,9 +91,25 @@ PAGE_HEAD = """<!DOCTYPE html><html lang="en"><head>
   @media(max-width:720px){header .tagline{display:none}}
   @media(max-width:700px){.table-wrap{display:none}.stack{display:block}}
 </style></head><body>
-<header><img src="/assets/logo.svg" alt=""><span class="wordmark">Heat Check</span>
-<span class="tagline">Find which buildings waste heat, and what to fix first.</span></header>
+<header>
+  <img src="/assets/logo.svg" alt="">
+  <span class="wordmark">Heat Check</span>
+  <span class="tagline">Find which buildings waste heat, and what to fix first.</span>
+  <nav aria-label="Main">
+    <a href="/" __NAV_PRIORITIES__>Priorities</a>
+    <a href="/upload" __NAV_UPLOAD__>Upload your data</a>
+  </nav>
+</header>
 <main>"""
+
+
+def page_head(active=""):
+    """Return PAGE_HEAD with the active nav link marked (active = '' | 'upload')."""
+    return (PAGE_HEAD
+            .replace("__NAV_PRIORITIES__",
+                     'aria-current="page"' if active == "priorities" else "")
+            .replace("__NAV_UPLOAD__",
+                     'aria-current="page"' if active == "upload" else ""))
 PAGE_FOOT = "</main></body></html>"
 
 
@@ -160,7 +184,7 @@ def sample(name: str):
 
 @app.get("/upload", response_class=HTMLResponse)
 def upload_form():
-    return HTMLResponse(PAGE_HEAD + """
+    return HTMLResponse(page_head("upload") + """
       <h1>Upload your data</h1>
       <p>Drop a CSV of hourly steam readings. We detect the format, map columns,
       convert units, and score it, or stop and ask if anything is ambiguous. Your
@@ -184,7 +208,10 @@ def upload_form():
 
 def _results_html(result):
     """Render the mapping report + scored table (or the ambiguous stop)."""
-    parts = [PAGE_HEAD, "<h1>Results</h1>"]
+    parts = [page_head("upload"), "<h1>Results</h1>",
+             '<p class="actions">'
+             '<a class="btn" href="/upload">Upload another file</a> '
+             '<a class="btn-outline" href="/">Back to the report</a></p>']
     if result["ambiguous"]:
         parts.append('<div class="card stop"><h3>We need your input</h3>'
                      "<p>This file is ambiguous, so we stopped instead of "
@@ -201,14 +228,16 @@ def _results_html(result):
 
 
 # Human-readable column headers, shown columns, and whether each is numeric.
+# Labels use a non-breaking space in number+unit pairs ("18\u00a0\u00b0C") and a
+# non-breaking hyphen ("Warm\u2011day") so they never split across lines.
 SCORED_COLUMNS = [
     ("building_id", "Building", False),
     ("city", "City", False),
     ("climate", "Climate", False),
     ("setback_ratio", "Setback ratio", True),
-    ("pct_hours_above_18c", "Hours above 18 C", True),
-    ("warm_day_share_pct", "Warm-day steam share", True),
-    ("warm_day_flag", "Warm-day flag", False),
+    ("pct_hours_above_18c", "Hours above 18\u00a0\u00b0C", True),
+    ("warm_day_share_pct", "Warm\u2011day steam share", True),
+    ("warm_day_flag", "Warm\u2011day flag", False),
 ]
 
 

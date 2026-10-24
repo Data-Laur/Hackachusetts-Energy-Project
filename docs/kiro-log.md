@@ -737,3 +737,26 @@ README top links collapsed to one: "Live app: https://heat-check-4w7d.onrender.c
 being turned off). The CI badge (GitHub Actions) stays. `docs/index.html` remains
 in the repo because the Render app serves it at `/`; only the Pages link was
 removed, not the report file.
+
+
+## Entry — Upload pages branding + non-breaking number/unit labels
+
+1. **Branded top bar on the upload pages (app.py):** the shared header now has
+   the logo, "Heat Check" wordmark, and nav links to "Priorities" (/) and
+   "Upload your data" (/upload), matching the report. `PAGE_HEAD` became a
+   `page_head(active)` helper that marks the current nav item with
+   `aria-current="page"`.
+2. **Results page top actions:** added "Upload another file" and "Back to the
+   report" buttons directly under the "Results" heading (above the first card),
+   and kept the existing links at the bottom.
+3. **Non-breaking number/unit labels:**
+   - Upload table header "Hours above 18 C" -> "Hours above 18 °C" with a
+     non-breaking space (U+00A0) between number and unit, so "°C" never drops to
+     its own line.
+   - Hyphenated headers/tags use a non-breaking hyphen (U+2011): "Warm‑day steam
+     share", "Warm‑day flag" (app), and the "Warm‑day heating" tag (report), so
+     they never break at the hyphen.
+   Verified via TestClient: form + results nav present, upload marked current,
+   top action buttons above the first card with bottom links retained, and the
+   NBSP/NB-hyphen characters present in the rendered headers/tags. Property tests
+   11/11; ingester sample run OK.
