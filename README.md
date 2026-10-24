@@ -7,7 +7,8 @@
 A campus heating copilot that finds where buildings waste heat, proves it with
 calibrated uncertainty, and refuses to answer when the evidence is weak.
 
-**Live demo:** https://data-laur.github.io/Hackachusetts-Energy-Project/
+- **Live report (GitHub Pages):** https://data-laur.github.io/Hackachusetts-Energy-Project/
+- **Upload your own data (Render):** https://heat-check-4w7d.onrender.com/upload
 
 ---
 

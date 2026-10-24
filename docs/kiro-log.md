@@ -620,3 +620,24 @@ ingester sample run OK.
    request was specifically about em dashes.
 
 Regenerated the report; property tests 11/11; ingester sample run OK.
+
+
+## Entry — Wire live Render app to Pages + README; live-site test
+
+Live Render URL: https://heat-check-4w7d.onrender.com (the bare `heat-check`
+subdomain was taken by an unrelated app, so Render assigned a suffixed host; I
+caught this before pointing anything at the wrong URL).
+
+1. Regenerated `docs/index.html` with
+   `HEATCHECK_UPLOAD_URL=https://heat-check-4w7d.onrender.com/upload`, so the
+   Pages "Upload your data" nav link opens the hosted app.
+2. README: replaced the single "Live demo" line with two links near the top:
+   "Live report (GitHub Pages)" and "Upload your own data (Render)".
+3. Live-site test results (all pass):
+   - GET /healthz -> {"ok":true} (HTTP 200)
+   - GET / -> HTTP 200, ~3.42 MB, our Priorities report
+   - GET /upload -> HTTP 200, form + sample buttons present
+   - POST sample A -> HTTP 200, scored table, city "Austin", climate warm,
+     MMBtu->kWh conversion applied
+   - POST sample C -> HTTP 200, "We need your input" ambiguous stop, no scored
+     table (correctly refused on the unit-less "Usage" column)
